@@ -145,6 +145,6 @@ def get_dataloader(
 
 
 if __name__ == "__main__":
-    train_dir = "../data/brats21/BraTS_2021_training"
+    train_dir = "/home/sanchit/Segmentation Research/BraTS Data/BraTS 2021/RSNA_ASNR_MICCAI_BraTS2021_TrainingData_16July2021"  # "../data/brats21/BraTS_2021_training"
     train_loader = get_dataloader(BratsDataset, train_dir, phase="train")
     data = next(iter(train_loader))
