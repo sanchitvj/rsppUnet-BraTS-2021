@@ -375,4 +375,5 @@ if __name__ == "__main__":
     }
     net = NvNet(config)
     out = net(x_train)
-    print(f"Output  shape {out.shape}")
+    print(f"Output shape {out.shape}")
+    # Output  shape torch.Size([3, 3, 16, 16, 16])
