@@ -19,9 +19,9 @@ import torch.nn.functional as F
 class Pyramid_Pooling_3D(nn.Module):
     def __init__(self, levels, mode="max"):
         """
-        General Pyramid Pooling class which uses Spatial Pyramid Pooling by default and holds the static methods for both spatial and temporal pooling.
-        :param levels defines the different divisions to be made in the width and (spatial) height dimension
-        :param mode defines the underlying pooling mode to be used, can either be "max" or "avg"
+        Pyramid Pooling class uses the static spatial pyramid pooling method to calculate the pooling.
+        :param levels -> [List] :  defines the filter size of the pooling layer to be used. Should be a list.
+        :param mode   -> String : Decides whether to use max or average pooling. Should be either "max" or "avg"
         """
         super(Pyramid_Pooling_3D, self).__init__()
         self.levels = levels
