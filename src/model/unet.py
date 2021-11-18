@@ -54,9 +54,8 @@ class EncoderBlock(nn.Module):
         super(EncoderBlock, self).__init__()
 
         # self.norm1 = 0
-        if normalizaiton == "group_normalization":
+        if normalizaiton == "group_normalizaiton":
             self.norm1 = nn.GroupNorm(num_groups=num_groups, num_channels=inChans)
-            print(self.norm1)
             self.norm2 = nn.GroupNorm(num_groups=num_groups, num_channels=inChans)
         # print(self.norm1)
         if activation == "relu":
@@ -96,8 +95,9 @@ class EncoderBlock(nn.Module):
 
 
 class Deconvolution(nn.Module):
-    def __init__(self, inChans, outChans, kernel_size=1, stride=2, dilation=1):
+    def __init__(self, inChans, outChans, kernel_size=2, stride=2, dilation=0):
         super(Deconvolution, self).__init__()
+
         self.conv_t = nn.ConvTranspose3d(
             inChans, outChans, kernel_size, stride, dilation, bias=False
         )
@@ -106,8 +106,12 @@ class Deconvolution(nn.Module):
 
         out = self.conv_t(x)
         if skipx is not None:
-            out = torch.cat((out, skipx), 1)
-            out = self.conv2(out)
+            # print(out.shape, skipx.shape)
+            # RuntimeError: torch.cat(): Sizes of tensors must match except in dimension 1. Got 1 and 2 in dimension 2 (The offending index is 1)
+            # skipx = torch.reshape(skipx, (3, 256, 8, 1, 1))  # 2^3/1^2
+            # soln2: kernel_size = 2
+            out = torch.cat((out, skipx), 1)  # 1 -> 2 after above change
+            # out = self.conv2(out)
 
         return out
 
@@ -125,11 +129,11 @@ class DecoderBlock(nn.Module):
         padding=1,
         num_groups=8,
         activation="relu",
-        normalizaiton="group_normalization",
+        normalizaiton="group_normalizaiton",
     ):
         super(DecoderBlock, self).__init__()
 
-        if normalizaiton == "group_normalization":
+        if normalizaiton == "group_normalizaiton":
             self.norm1 = nn.GroupNorm(num_groups=num_groups, num_channels=outChans)
             self.norm2 = nn.GroupNorm(num_groups=num_groups, num_channels=outChans)
         if activation == "relu":
@@ -198,6 +202,7 @@ class AttentionBlock(nn.Module):
         super(AttentionBlock, self).__init__()
         self.mode = mode
         self.scale_factor = scale_factor
+
         self.W_g = nn.Sequential(
             nn.Conv3d(
                 F_g, F_int, kernel_size=1, stride=1, padding=0, bias=True
@@ -293,24 +298,24 @@ class NvNet(nn.Module):
             256, 256, activation=self.activation, normalizaiton=self.normalizaiton
         )
 
-        self.en_down4 = DownSampling(256, 320)
+        self.en_down4 = DownSampling(256, 512)
         self.en_block4_0 = EncoderBlock(
-            320, 320, activation=self.activation, normalizaiton=self.normalizaiton
+            512, 512, activation=self.activation, normalizaiton=self.normalizaiton
         )
         self.en_block4_1 = EncoderBlock(
-            320, 320, activation=self.activation, normalizaiton=self.normalizaiton
+            512, 512, activation=self.activation, normalizaiton=self.normalizaiton
         )
         self.en_block4_2 = EncoderBlock(
-            320, 320, activation=self.activation, normalizaiton=self.normalizaiton
+            512, 512, activation=self.activation, normalizaiton=self.normalizaiton
         )
         self.en_block4_3 = EncoderBlock(
-            320, 320, activation=self.activation, normalizaiton=self.normalizaiton
+            512, 512, activation=self.activation, normalizaiton=self.normalizaiton
         )
 
         ######################  SPATIAL PYRAMID POOLING BLOCK   ###########################
 
         # Decoder Blocks
-        self.de_up3 = Deconvolution(320, 256)
+        self.de_up3 = Deconvolution(512, 256)
         self.de_block3 = DecoderBlock(
             256, 256, activation=self.activation, normalizaiton=self.normalizaiton
         )
@@ -328,8 +333,8 @@ class NvNet(nn.Module):
         )
 
         # Attention Blocks
-        self.ag_3 = AttentionBlock(320, 256, 256)
-        self.ag_2 = AttentionBlock(256, 128, 128)  # forward(g, x)
+        self.ag_3 = AttentionBlock(512, 256, 256)  # forward(g, x)
+        self.ag_2 = AttentionBlock(256, 128, 128)
         self.ag_1 = AttentionBlock(128, 64, 64)
         self.ag_0 = AttentionBlock(64, 32, 32)
 
@@ -344,8 +349,13 @@ class NvNet(nn.Module):
         out_en4 = self.en_block4_3(
             self.en_block4_2(self.en_block4_1(self.en_block4_0(self.en_down4(out_en3))))
         )
-
-        out_de3 = self.de_block3(self.de_up3(out_en4, self.ag_3(out_en4, out_en3)))
+        print(out_en3.shape)
+        print(out_en4.shape)
+        att3 = self.ag_3(out_en4, out_en3)
+        print(att3.shape)
+        de_up3 = self.de_up3(out_en4, att3)
+        print(de_up3.shape)
+        out_de3 = self.de_block3(de_up3)
         out_de2 = self.de_block2(self.de_up2(out_de3, self.ag_2(out_de3, out_en2)))
         out_de1 = self.de_block1(self.de_up1(out_de2, self.ag_1(out_de2, out_en1)))
         out_de0 = self.de_block0(self.de_up0(out_de1, self.ag_0(out_de1, out_en0)))
