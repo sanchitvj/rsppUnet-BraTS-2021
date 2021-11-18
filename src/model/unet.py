@@ -6,6 +6,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import numpy as np
 
 
 class DownSampling(nn.Module):
@@ -52,9 +53,12 @@ class EncoderBlock(nn.Module):
     ):
         super(EncoderBlock, self).__init__()
 
+        # self.norm1 = 0
         if normalizaiton == "group_normalization":
             self.norm1 = nn.GroupNorm(num_groups=num_groups, num_channels=inChans)
+            print(self.norm1)
             self.norm2 = nn.GroupNorm(num_groups=num_groups, num_channels=inChans)
+        # print(self.norm1)
         if activation == "relu":
             self.actv1 = nn.ReLU(inplace=True)
             self.actv2 = nn.ReLU(inplace=True)
@@ -91,44 +95,8 @@ class EncoderBlock(nn.Module):
         return out
 
 
-# class LinearUpSampling(nn.Module):
-#     """
-#     Trilinear interpolate to upsampling
-#     """
-
-#     def __init__(
-#         self, inChans, outChans, scale_factor=2, mode="trilinear", align_corners=True
-#     ):
-#         super(LinearUpSampling, self).__init__()
-#         self.scale_factor = scale_factor
-#         self.mode = mode
-#         self.align_corners = align_corners
-#         self.conv1 = nn.Conv3d(
-#             in_channels=inChans, out_channels=outChans, kernel_size=1
-#         )
-#         self.conv2 = nn.Conv3d(
-#             in_channels=inChans, out_channels=outChans, kernel_size=1
-#         )
-
-#     def forward(self, x, skipx=None):
-#         out = self.conv1(x)
-#         # out = self.up1(out)
-#         out = nn.functional.interpolate(
-#             out,
-#             scale_factor=self.scale_factor,
-#             mode=self.mode,
-#             align_corners=self.align_corners,
-#         )
-
-#         if skipx is not None:
-#             out = torch.cat((out, skipx), 1)
-#             out = self.conv2(out)
-
-#         return out
-
-
 class Deconvolution(nn.Module):
-    def __init__(self, inChans, outChans, kernel_size, stride=2, dilation=1):
+    def __init__(self, inChans, outChans, kernel_size=1, stride=2, dilation=1):
         super(Deconvolution, self).__init__()
         self.conv_t = nn.ConvTranspose3d(
             inChans, outChans, kernel_size, stride, dilation, bias=False
@@ -292,7 +260,6 @@ class NvNet(nn.Module):
         self.seg_outChans = config["n_labels"]
         self.activation = config["activation"]
         self.normalizaiton = config["normalizaiton"]
-        self.mode = config["mode"]
 
         # Encoder Blocks
         self.in_conv0 = DownSampling(
@@ -343,19 +310,19 @@ class NvNet(nn.Module):
         ######################  SPATIAL PYRAMID POOLING BLOCK   ###########################
 
         # Decoder Blocks
-        self.de_up3 = Deconvolution(320, 256, mode=self.mode)
+        self.de_up3 = Deconvolution(320, 256)
         self.de_block3 = DecoderBlock(
             256, 256, activation=self.activation, normalizaiton=self.normalizaiton
         )
-        self.de_up2 = Deconvolution(256, 128, mode=self.mode)
+        self.de_up2 = Deconvolution(256, 128)
         self.de_block2 = DecoderBlock(
             128, 128, activation=self.activation, normalizaiton=self.normalizaiton
         )
-        self.de_up1 = Deconvolution(128, 64, mode=self.mode)
+        self.de_up1 = Deconvolution(128, 64)
         self.de_block1 = DecoderBlock(
             64, 64, activation=self.activation, normalizaiton=self.normalizaiton
         )
-        self.de_up0 = Deconvolution(64, 32, mode=self.mode)
+        self.de_up0 = Deconvolution(64, 32)
         self.de_block0 = DecoderBlock(
             32, 32, activation=self.activation, normalizaiton=self.normalizaiton
         )
@@ -386,3 +353,19 @@ class NvNet(nn.Module):
         out_end = self.de_end(out_de0)
 
         return out_end
+
+
+if __name__ == "__main__":
+
+    x_train = np.random.randn(3, 32, 16, 16, 16)
+    x_train = torch.from_numpy(x_train).float()
+
+    config = {
+        "input_shape": (1, 32, [16, 16, 16]),
+        "n_labels": 3,
+        "activation": "relu",
+        "normalizaiton": "group_normalizaiton",
+    }
+    net = NvNet(config)
+    out = net(x_train)
+    print(f"Output  shape {out.shape}")
