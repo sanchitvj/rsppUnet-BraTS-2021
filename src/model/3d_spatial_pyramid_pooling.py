@@ -39,14 +39,14 @@ class Pyramid_Pooling_3D(nn.Module):
             self.pool_2 = nn.AvgPool3d((levels[1], levels[1], levels[1]))
             self.pool_3 = nn.AvgPool3d((levels[0], levels[0], levels[0]))
 
-    def forward(self, en1, en2, en3):
+        self.conv3d_bottleneck_pyramid = nn.Conv3d(self.inChans, self.outChans, kernel_size=1)
 
-        print(en1.shape)
+    def forward(self, en1, en2, en3):
         pooled_out_1 = self.pool_1(en1)
         pooled_out_2 = self.pool_2(en2)
         pooled_out_3 = self.pool_3(en3)
         cat = torch.cat((pooled_out_1, pooled_out_2, pooled_out_3), 1)
-        out = nn.Conv3d(self.inChans, self.outChans, kernel_size=1)
+        out = self.conv3d_bottleneck_pyramid(cat)
         return out
 
 
@@ -60,7 +60,7 @@ if __name__ == "__main__":
     x_train_2 = np.random.randn(3, 256, 64, 64, 64)
     x_train_2 = torch.from_numpy(x_train_2).float()
 
-    pyramid_pooling = Pyramid_Pooling_3D([2, 4, 8], "max")
+    pyramid_pooling = Pyramid_Pooling_3D([2, 4, 8])
     out = pyramid_pooling(x_train_2, x_train_1, x_train)
     print(f"Output  shape {out.shape}")
 
