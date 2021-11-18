@@ -364,7 +364,7 @@ class NvNet(nn.Module):
 
 if __name__ == "__main__":
 
-    x_train = np.random.randn(3, 32, 16, 16, 16)
+    x_train = np.random.randn(3, 32, 128, 128, 128)
     x_train = torch.from_numpy(x_train).float()
 
     config = {
