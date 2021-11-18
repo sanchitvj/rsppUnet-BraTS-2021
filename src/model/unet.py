@@ -101,6 +101,8 @@ class Deconvolution(nn.Module):
         self.conv_t = nn.ConvTranspose3d(
             inChans, outChans, kernel_size, stride, dilation, bias=False
         )
+        # to lower the dimension 512 -> 256
+        self.conv_bottleneck = nn.Conv3d(inChans, outChans, kernel_size=1)
 
     def forward(self, x, skipx=None):
 
@@ -111,7 +113,7 @@ class Deconvolution(nn.Module):
             # skipx = torch.reshape(skipx, (3, 256, 8, 1, 1))  # 2^3/1^2
             # soln2: kernel_size = 2
             out = torch.cat((out, skipx), 1)  # 1 -> 2 after above change
-            # out = self.conv2(out)
+            out = self.conv_bottleneck(out)
 
         return out
 
@@ -349,13 +351,8 @@ class NvNet(nn.Module):
         out_en4 = self.en_block4_3(
             self.en_block4_2(self.en_block4_1(self.en_block4_0(self.en_down4(out_en3))))
         )
-        print(out_en3.shape)
-        print(out_en4.shape)
-        att3 = self.ag_3(out_en4, out_en3)
-        print(att3.shape)
-        de_up3 = self.de_up3(out_en4, att3)
-        print(de_up3.shape)
-        out_de3 = self.de_block3(de_up3)
+
+        out_de3 = self.de_block3(self.de_up3(out_en4, self.ag_3(out_en4, out_en3)))
         out_de2 = self.de_block2(self.de_up2(out_de3, self.ag_2(out_de3, out_en2)))
         out_de1 = self.de_block1(self.de_up1(out_de2, self.ag_1(out_de2, out_en1)))
         out_de0 = self.de_block0(self.de_up0(out_de1, self.ag_0(out_de1, out_en0)))
