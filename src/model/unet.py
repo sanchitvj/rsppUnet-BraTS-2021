@@ -7,6 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+from spp_3d import Pyramid_Pooling_3D
 
 
 class DownSampling(nn.Module):
@@ -315,6 +316,8 @@ class NvNet(nn.Module):
         )
 
         ######################  SPATIAL PYRAMID POOLING BLOCK   ###########################
+        self.pyramid_pooling = Pyramid_Pooling_3D([2, 4, 8])
+        self.bottleneck = nn.Conv3d(1024, 512, kernel_size=1)
 
         # Decoder Blocks
         self.de_up3 = Deconvolution(512, 256)
@@ -351,8 +354,12 @@ class NvNet(nn.Module):
         out_en4 = self.en_block4_3(
             self.en_block4_2(self.en_block4_1(self.en_block4_0(self.en_down4(out_en3))))
         )
+        out_spp3d = self.pyramid_pooling(out_en1, out_en2, out_en3)
 
-        out_de3 = self.de_block3(self.de_up3(out_en4, self.ag_3(out_en4, out_en3)))
+        enc_spp_out = torch.cat((out_en4, out_spp3d), 1)
+        enc_spp_out = self.bottleneck(enc_spp_out)
+
+        out_de3 = self.de_block3(self.de_up3(out_en4, self.ag_3(enc_spp_out, out_en3)))
         out_de2 = self.de_block2(self.de_up2(out_de3, self.ag_2(out_de3, out_en2)))
         out_de1 = self.de_block1(self.de_up1(out_de2, self.ag_1(out_de2, out_en1)))
         out_de0 = self.de_block0(self.de_up0(out_de1, self.ag_0(out_de1, out_en0)))
