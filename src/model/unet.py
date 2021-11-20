@@ -264,7 +264,7 @@ class NvNet(nn.Module):
         # some critical parameters
         self.inChans = config["input_shape"][1]
         self.input_shape = config["input_shape"]
-        self.seg_outChans = config["n_labels"]
+        self.seg_outChans = config["c"]
         self.activation = config["activation"]
         self.normalizaiton = config["normalizaiton"]
 
