@@ -97,7 +97,7 @@ class BratsDataset(Dataset):
         return (data - data_min) / (np.max(data) - data_min)
 
     def resize(self, data: np.ndarray):
-        data = resize(data, (78, 120, 120), preserve_range=True)
+        data = resize(data, (128, 128, 128), preserve_range=True)
         return data
 
     def preprocess_mask_labels(self, mask: np.ndarray):
@@ -145,6 +145,6 @@ def get_dataloader(
 
 
 if __name__ == "__main__":
-    train_dir = "/home/sanchit/Segmentation Research/BraTS Data/BraTS 2021/RSNA_ASNR_MICCAI_BraTS2021_TrainingData_16July2021"  # "../data/brats21/BraTS_2021_training"
+    train_dir = "/home/sanchit/Segmentation Research/BraTS Data/loader_test"  # "../data/brats21/BraTS_2021_training"
     train_loader = get_dataloader(BratsDataset, train_dir, phase="train")
     data = next(iter(train_loader))
