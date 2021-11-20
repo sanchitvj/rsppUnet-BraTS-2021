@@ -25,7 +25,6 @@ class Pyramid_Pooling_3D(nn.Module):
         :param mode   -> String : Decides whether to use max or average pooling. Should be either "max" or "avg"
         """
         super(Pyramid_Pooling_3D, self).__init__()
-        # self.levels = levels
         self.inChans = inChans
         self.outChans = outChans
         assert len(levels) == 3
@@ -39,7 +38,9 @@ class Pyramid_Pooling_3D(nn.Module):
             self.pool_2 = nn.AvgPool3d((levels[1], levels[1], levels[1]))
             self.pool_3 = nn.AvgPool3d((levels[0], levels[0], levels[0]))
 
-        self.conv3d_bottleneck_pyramid = nn.Conv3d(self.inChans, self.outChans, kernel_size=1)
+        self.conv3d_bottleneck_pyramid = nn.Conv3d(
+            self.inChans, self.outChans, kernel_size=1
+        )
 
     def forward(self, en1, en2, en3):
         pooled_out_1 = self.pool_1(en1)
@@ -50,19 +51,24 @@ class Pyramid_Pooling_3D(nn.Module):
         return out
 
 
-if __name__ == "__main__":
-    x_train = np.random.randn(3, 64, 16, 16, 16)
-    x_train = torch.from_numpy(x_train).float()
+# if __name__ == "__main__":
+#     x_train = np.random.randn(3, 64, 16, 16, 16)
+#     x_train = torch.from_numpy(x_train).float()
 
-    x_train_1 = np.random.randn(3, 128, 32, 32, 32)
-    x_train_1 = torch.from_numpy(x_train_1).float()
+#     x_train_1 = np.random.randn(3, 128, 32, 32, 32)
+#     x_train_1 = torch.from_numpy(x_train_1).float()
 
-    x_train_2 = np.random.randn(3, 256, 64, 64, 64)
-    x_train_2 = torch.from_numpy(x_train_2).float()
+#     x_train_2 = np.random.randn(3, 256, 64, 64, 64)
+#     x_train_2 = torch.from_numpy(x_train_2).float()
 
-    pyramid_pooling = Pyramid_Pooling_3D([2, 4, 8])
-    out = pyramid_pooling(x_train_2, x_train_1, x_train)
-    print(f"Output  shape {out.shape}")
+
+# inChans = x_train_0.shape[1] + x_train_1.shape[1] + x_train_2.shape[1]
+# outChans = 512
+
+# kernel_size = [2,4,8]
+#     pyramid_pooling = Pyramid_Pooling_3D([2, 4, 8])
+#     out = pyramid_pooling(x_train_2, x_train_1, x_train)
+#     print(f"Output  shape {out.shape}")
 
 """
 torch.Size([3, 32, 128, 128, 128]) -> 512, 64, 64, 64 => 576
