@@ -316,10 +316,12 @@ class NvNet(nn.Module):
         )
 
         ######################  SPATIAL PYRAMID POOLING BLOCK   ###########################
+        # self.spp_inChans = self.en
         self.pyramid_pooling = Pyramid_Pooling_3D([2, 4, 8])
         self.bottleneck = nn.Conv3d(1024, 512, kernel_size=1)
 
         # Decoder Blocks
+        # TODO try dilated convolutions
         self.de_up3 = Deconvolution(512, 256)
         self.de_block3 = DecoderBlock(
             256, 256, activation=self.activation, normalizaiton=self.normalizaiton
