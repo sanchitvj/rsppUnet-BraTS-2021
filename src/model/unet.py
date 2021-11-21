@@ -378,6 +378,7 @@ if __name__ == "__main__":
 
     config = {
         "input_shape": (1, 32, [16, 16, 16]),
+        "c" : 3,
         "n_labels": 3,
         "activation": "relu",
         "normalizaiton": "group_normalizaiton",
