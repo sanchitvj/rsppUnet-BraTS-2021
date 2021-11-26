@@ -147,4 +147,7 @@ def get_dataloader(
 if __name__ == "__main__":
     train_dir = "/home/sanchit/Segmentation Research/BraTS Data/loader_test"  # "../data/brats21/BraTS_2021_training"
     train_loader = get_dataloader(BratsDataset, train_dir, phase="train")
-    data = next(iter(train_loader))
+    # data = next(iter(train_loader))
+    for i, batch in enumerate(train_loader):
+        if i % 500 == 0:
+            print(batch["image"][i].shape)
