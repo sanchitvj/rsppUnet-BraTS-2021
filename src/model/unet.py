@@ -1,8 +1,3 @@
-"""
-@Author: Zhou Kai
-@GitHub: https://github.com/athon2
-@Date: 2018-11-30 09:53:44
-"""
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -50,12 +45,13 @@ class EncoderBlock(nn.Module):
         padding=1,
         num_groups=8,
         activation="relu",
-        normalizaiton="group_normalization",
+        normalization="group_normalization",
     ):
         super(EncoderBlock, self).__init__()
 
         # self.norm1 = 0
-        if normalizaiton == "group_normalizaiton":
+        # TODO: try different normalizations
+        if normalization == "group_normalization":
             self.norm1 = nn.GroupNorm(num_groups=num_groups, num_channels=inChans)
             self.norm2 = nn.GroupNorm(num_groups=num_groups, num_channels=inChans)
         # print(self.norm1)
@@ -132,11 +128,11 @@ class DecoderBlock(nn.Module):
         padding=1,
         num_groups=8,
         activation="relu",
-        normalizaiton="group_normalizaiton",
+        normalization="group_normalization",
     ):
         super(DecoderBlock, self).__init__()
 
-        if normalizaiton == "group_normalizaiton":
+        if normalization == "group_normalization":
             self.norm1 = nn.GroupNorm(num_groups=num_groups, num_channels=outChans)
             self.norm2 = nn.GroupNorm(num_groups=num_groups, num_channels=outChans)
         if activation == "relu":
@@ -257,6 +253,9 @@ class AttentionBlock(nn.Module):
             return x * alpha
 
 
+# TODO: change the name of the architecture
+
+
 class NvNet(nn.Module):
     def __init__(self, config):
         super(NvNet, self).__init__()
@@ -265,54 +264,54 @@ class NvNet(nn.Module):
         # some critical parameters
         self.inChans = config["input_shape"][1]
         self.input_shape = config["input_shape"]
-        self.seg_outChans = config["c"]
+        self.seg_outChans = config["output_channel"]
         self.activation = config["activation"]
-        self.normalizaiton = config["normalizaiton"]
+        self.normalization = config["normalization"]
 
         # Encoder Blocks
         self.in_conv0 = DownSampling(
             inChans=self.inChans, outChans=32, stride=1, dropout_rate=0.2
         )
         self.en_block0 = EncoderBlock(
-            32, 32, activation=self.activation, normalizaiton=self.normalizaiton
+            32, 32, activation=self.activation, normalization=self.normalization
         )
 
         self.en_down1 = DownSampling(32, 64)
         self.en_block1_0 = EncoderBlock(
-            64, 64, activation=self.activation, normalizaiton=self.normalizaiton
+            64, 64, activation=self.activation, normalization=self.normalization
         )
         self.en_block1_1 = EncoderBlock(
-            64, 64, activation=self.activation, normalizaiton=self.normalizaiton
+            64, 64, activation=self.activation, normalization=self.normalization
         )
 
         self.en_down2 = DownSampling(64, 128)
         self.en_block2_0 = EncoderBlock(
-            128, 128, activation=self.activation, normalizaiton=self.normalizaiton
+            128, 128, activation=self.activation, normalization=self.normalization
         )
         self.en_block2_1 = EncoderBlock(
-            128, 128, activation=self.activation, normalizaiton=self.normalizaiton
+            128, 128, activation=self.activation, normalization=self.normalization
         )
 
         self.en_down3 = DownSampling(128, 256)
         self.en_block3_0 = EncoderBlock(
-            256, 256, activation=self.activation, normalizaiton=self.normalizaiton
+            256, 256, activation=self.activation, normalization=self.normalization
         )
         self.en_block3_1 = EncoderBlock(
-            256, 256, activation=self.activation, normalizaiton=self.normalizaiton
+            256, 256, activation=self.activation, normalization=self.normalization
         )
 
         self.en_down4 = DownSampling(256, 512)
         self.en_block4_0 = EncoderBlock(
-            512, 512, activation=self.activation, normalizaiton=self.normalizaiton
+            512, 512, activation=self.activation, normalization=self.normalization
         )
         self.en_block4_1 = EncoderBlock(
-            512, 512, activation=self.activation, normalizaiton=self.normalizaiton
+            512, 512, activation=self.activation, normalization=self.normalization
         )
         self.en_block4_2 = EncoderBlock(
-            512, 512, activation=self.activation, normalizaiton=self.normalizaiton
+            512, 512, activation=self.activation, normalization=self.normalization
         )
         self.en_block4_3 = EncoderBlock(
-            512, 512, activation=self.activation, normalizaiton=self.normalizaiton
+            512, 512, activation=self.activation, normalization=self.normalization
         )
 
         ######################  SPATIAL PYRAMID POOLING BLOCK   ###########################
@@ -324,19 +323,19 @@ class NvNet(nn.Module):
         # TODO try dilated convolutions
         self.de_up3 = Deconvolution(512, 256)
         self.de_block3 = DecoderBlock(
-            256, 256, activation=self.activation, normalizaiton=self.normalizaiton
+            256, 256, activation=self.activation, normalization=self.normalization
         )
         self.de_up2 = Deconvolution(256, 128)
         self.de_block2 = DecoderBlock(
-            128, 128, activation=self.activation, normalizaiton=self.normalizaiton
+            128, 128, activation=self.activation, normalization=self.normalization
         )
         self.de_up1 = Deconvolution(128, 64)
         self.de_block1 = DecoderBlock(
-            64, 64, activation=self.activation, normalizaiton=self.normalizaiton
+            64, 64, activation=self.activation, normalization=self.normalization
         )
         self.de_up0 = Deconvolution(64, 32)
         self.de_block0 = DecoderBlock(
-            32, 32, activation=self.activation, normalizaiton=self.normalizaiton
+            32, 32, activation=self.activation, normalization=self.normalization
         )
 
         # Attention Blocks
@@ -371,19 +370,19 @@ class NvNet(nn.Module):
         return out_end
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-    x_train = np.random.randn(3, 32, 128, 128, 128)
-    x_train = torch.from_numpy(x_train).float()
+#     x_train = np.random.randn(3, 32, 128, 128, 128)
+#     x_train = torch.from_numpy(x_train).float()
 
-    config = {
-        "input_shape": (1, 32, [16, 16, 16]),
-        "c" : 3,
-        "n_labels": 3,
-        "activation": "relu",
-        "normalizaiton": "group_normalizaiton",
-    }
-    net = NvNet(config)
-    out = net(x_train)
-    print(f"Output shape {out.shape}")
-    # Output  shape torch.Size([3, 3, 16, 16, 16])
+#     config = {
+#         "input_shape": (1, 32, [16, 16, 16]),
+#         "c" : 3,
+#         "n_labels": 3,
+#         "activation": "relu",
+#         "normalization": "group_normalization",
+#     }
+#     net = NvNet(config)
+#     out = net(x_train)
+#     print(f"Output shape {out.shape}")
+# Output  shape torch.Size([3, 3, 16, 16, 16])

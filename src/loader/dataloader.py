@@ -84,7 +84,6 @@ class BratsDataset(Dataset):
         data,
         size,
         phase: str = "test",
-        is_resize: bool = False,
     ):
 
         self.data = data
@@ -92,7 +91,6 @@ class BratsDataset(Dataset):
         self.augmentations = get_augmentations(phase, size)
         self.data_types = ["_flair.nii.gz", "_t1.nii.gz", "_t1ce.nii.gz", "_t2.nii.gz"]
         self.size = size
-        self.is_resize = is_resize
 
     def __len__(self):
         return len(self.data)
@@ -124,7 +122,7 @@ class BratsDataset(Dataset):
         img = img[:, zmin:zmax, ymin:ymax, xmin:xmax]
         # if self.is_resize:
         #     img = self.resize(img, self.size)
-        # img = np.moveaxis(img, (0, 1, 2, 3), (0, 3, 2, 1))
+        img = np.moveaxis(img, (0, 1, 2, 3), (0, 3, 2, 1))
 
         if self.phase != "test":
             mask_name = dir_name + "_seg.nii.gz"
@@ -140,7 +138,7 @@ class BratsDataset(Dataset):
             mask = np.clip(mask, 0, 1)
 
             # TODO: Test this
-            img, mask = pad_or_crop_image(img, mask, target_size=(128, 128, 128))
+            img, mask = pad_or_crop_image(img, mask, target_size=self.size)
             # TODO add augmentations
             augmented = self.augmentations(
                 image=img.astype(np.float32), mask=mask.astype(np.float32)
@@ -206,16 +204,16 @@ class BratsDataset(Dataset):
 
 
 def get_dataset(
-    dir,
-    seed: int,
-    size=(16, 16, 16),
-    n_splits: int = 5,
-    fold_num: int = 0,
-    debug: bool = False,
+    data_path,
+    seed,
+    size,
+    fold_num,
+    debug,
+    n_splits,
 ):
     train_dir = []
-    for filename in os.listdir(dir):
-        f = os.path.join(dir, filename)
+    for filename in os.listdir(data_path):
+        f = os.path.join(data_path, filename)
         train_dir.append(f)
 
     kfold = KFold(n_splits, shuffle=True, random_state=seed)
@@ -226,30 +224,30 @@ def get_dataset(
     train = [train_dir[i] for i in train_idx]
     val = [train_dir[i] for i in val_idx]
 
-    train_dataset = BratsDataset(train, size, phase="train", is_resize=True)
-    val_dataset = BratsDataset(val, size, phase="val", is_resize=True)
+    train_dataset = BratsDataset(train, size, phase="train")
+    val_dataset = BratsDataset(val, size, phase="val")
     return train_dataset, val_dataset
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-    train_dir = "/home/sanchit/Segmentation Research/BraTS Data/loader_test/"  # "../data/brats21/BraTS_2021_training"
-    start1 = time.time()
-    for i in range(2):
-        start2 = time.time()
-        train_dataset, val_dataset = get_dataset(train_dir, 1111, fold_num=i)
+#     train_dir = "/home/sanchit/Segmentation Research/BraTS Data/loader_test/"  # "../data/brats21/BraTS_2021_training"
+#     start1 = time.time()
+#     for i in range(2):
+#         start2 = time.time()
+#         train_dataset, val_dataset = get_dataset(train_dir, 1111, fold_num=i)
 
-        train_loader = DataLoader(
-            train_dataset, batch_size=1, shuffle=True, num_workers=4
-        )
-        val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=4)
-        # train_data = next(iter(train_loader))
-        # val_data = next(iter(val_loader))
-        loader = tqdm(train_loader, total=len(train_loader))
-        for step, batch in enumerate(loader):
-            if i % 400 == 0:
-                print(step, batch["image"].shape)
-        print(f"time taken for fold {i}: {time.time() - start2}")
-    print("total time: ", (time.time() - start1))
-    # print(len(train_loader), len(val_loader))
-    # print(train_data["image"][0].shape, val_data["image"][0].shape)
+#         train_loader = DataLoader(
+#             train_dataset, batch_size=1, shuffle=True, num_workers=4
+#         )
+#         val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=4)
+#         # train_data = next(iter(train_loader))
+#         # val_data = next(iter(val_loader))
+#         loader = tqdm(train_loader, total=len(train_loader))
+#         for step, batch in enumerate(loader):
+#             if i % 400 == 0:
+#                 print(step, batch["image"].shape)
+#         print(f"time taken for fold {i}: {time.time() - start2}")
+#     print("total time: ", (time.time() - start1))
+# print(len(train_loader), len(val_loader))
+# print(train_data["image"][0].shape, val_data["image"][0].shape)

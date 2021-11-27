@@ -2,6 +2,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 
+
 def sum_tensor(inp, axes, keepdim=False):
     axes = np.unique(axes).astype(int)
     if keepdim:
@@ -12,9 +13,10 @@ def sum_tensor(inp, axes, keepdim=False):
             inp = inp.sum(int(ax))
     return inp
 
+
 # Taken from NNUnet
 class SoftDiceLossSquared(nn.Module):
-    def __init__(self, apply_nonlin=None, batch_dice=False, do_bg=True, smooth=1.):
+    def __init__(self, apply_nonlin=None, batch_dice=False, do_bg=True, smooth=1.0):
         """
         squares the terms in the denominator as proposed by Milletari et al.
         """
@@ -77,8 +79,7 @@ import torch.nn as nn
 
 
 class EDiceLoss(nn.Module):
-    """Dice loss tailored to Brats need.
-    """
+    """Dice loss tailored to Brats need."""
 
     def __init__(self, do_sigmoid=True):
         super(EDiceLoss, self).__init__()
@@ -87,7 +88,7 @@ class EDiceLoss(nn.Module):
         self.device = "cpu"
 
     def binary_dice(self, inputs, targets, label_index, metric_mode=False):
-        smooth = 1.
+        smooth = 1.0
         if self.do_sigmoid:
             inputs = torch.sigmoid(inputs)
 
@@ -96,15 +97,17 @@ class EDiceLoss(nn.Module):
             if targets.sum() == 0:
                 print(f"No {self.labels[label_index]} for this patient")
                 if inputs.sum() == 0:
-                    return torch.tensor(1., device="cuda")
+                    return torch.tensor(1.0, device="cuda")
                 else:
-                    return torch.tensor(0., device="cuda")
+                    return torch.tensor(0.0, device="cuda")
             # Threshold the pred
         intersection = EDiceLoss.compute_intersection(inputs, targets)
         if metric_mode:
             dice = (2 * intersection) / ((inputs.sum() + targets.sum()) * 1.0)
         else:
-            dice = (2 * intersection + smooth) / (inputs.pow(2).sum() + targets.pow(2).sum() + smooth)
+            dice = (2 * intersection + smooth) / (
+                inputs.pow(2).sum() + targets.pow(2).sum() + smooth
+            )
         if metric_mode:
             return dice
         return 1 - dice
@@ -131,11 +134,12 @@ class EDiceLoss(nn.Module):
             dices.append(dice)
         return dices
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     loss = SoftDiceLossSquared()
     out = torch.randn((4, 3, 128, 128, 128))
     target = torch.randn((4, 3, 128, 128, 128))
-    print(loss(out,target))
+    print(loss(out, target))
 
     brats_2020_loss = EDiceLoss()
-    print(brats_2020_loss(out,target))
+    print(brats_2020_loss(out, target))
