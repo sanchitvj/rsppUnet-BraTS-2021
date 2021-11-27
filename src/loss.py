@@ -135,11 +135,11 @@ class EDiceLoss(nn.Module):
         return dices
 
 
-if __name__ == "__main__":
-    loss = SoftDiceLossSquared()
-    out = torch.randn((4, 3, 128, 128, 128))
-    target = torch.randn((4, 3, 128, 128, 128))
-    print(loss(out, target))
+# if __name__ == "__main__":
+#     loss = SoftDiceLossSquared()
+#     out = torch.randn((4, 3, 128, 128, 128))
+#     target = torch.randn((4, 3, 128, 128, 128))
+#     print(loss(out, target))
 
-    brats_2020_loss = EDiceLoss()
-    print(brats_2020_loss(out, target))
+#     brats_2020_loss = EDiceLoss()
+#     print(brats_2020_loss(out, target))
