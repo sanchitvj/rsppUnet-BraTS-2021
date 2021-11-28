@@ -16,6 +16,8 @@ from loss import SoftDiceLossSquared
 
 from utils import AverageMeter, save_metrics, calculate_metrics, dice_coefficient
 
+#Setting up logging stuff
+import wandb
 # Below function can also be used for validation
 # INFO: https://discuss.pytorch.org/t/mixed-precision-in-evaluation/94184
 
@@ -87,7 +89,38 @@ def trainer(
         batch_time.update(time.perf_counter() - start_point)
         start_point = time.perf_counter()
 
+        #For Logging on a batch basis
+
+        if phase == "Training":
+            wandb.log({
+                "Train Dice Loss" : loss,
+                "Train Class 0 Dice": metric_[0],
+                "Train Class 1 Dice": metric_[1],
+                "Train Class 2 Dice": metric_[2]
+            })
+        elif phase == "Validating":
+            wandb.log({
+                "Valid Dice Loss" : loss,
+                "Valid Class 0 Dice": metric_[0],
+                "Valid Class 1 Dice": metric_[1],
+                "Valid Class 2 Dice": metric_[2]
+            })
+
     # TODO: add wandb logger
+
+    """
+    #Remove this comment for logging on epoch basis
+    if phase == "Training":
+        wandb.log({
+        "Train Dice Loss" : loss
+        })
+    elif phase == "Validating":
+        wandb.log({
+            "Valid Dice Loss" : loss
+        })
+
+    """
+
     # if not model.training:
     # save_metrics(epoch, metrics, swa, logger, epoch, False, save_folder)
 

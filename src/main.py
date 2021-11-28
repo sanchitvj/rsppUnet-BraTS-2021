@@ -3,6 +3,9 @@ from datetime import datetime
 import numpy as np
 from tqdm import tqdm
 
+import wandb
+from logger.wandb_creds import get_wandb_creds
+
 import torch
 from torch.optim import Adam, AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -158,6 +161,8 @@ def main(args, fold_num):
     save_args(args)
 
     # TODO: add logger
+    wandb.login(key = get_wandb_creds())
+
 
     model_config = {
         "input_shape": (args.batch_size, 4, [128, 128, 128]),
@@ -166,6 +171,8 @@ def main(args, fold_num):
         "activation": args.activation,
         "normalization": args.normalization,
     }
+
+
     # TODO: change the name of the architecture
     model = NvNet(model_config)
     print(
@@ -218,6 +225,9 @@ def main(args, fold_num):
     )
 
     best = np.inf
+
+    wandb.init(project='Brats_21_Segmentation', config = model_config)
+
     for epoch in range(args.epochs):
 
         model.train()
@@ -271,6 +281,8 @@ def main(args, fold_num):
             scheduler.step()
             print("scheduler stepped!")
 
+    wandb.run.name = f"BRATS_RUN_F{fold_num}"
+    wandb.run.save()
     # TODO: generate segmentation maps
 
 
