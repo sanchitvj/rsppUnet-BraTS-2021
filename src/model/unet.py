@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from spp_3d import Pyramid_Pooling_3D
+from .spp_3d import Pyramid_Pooling_3D
 
 
 class DownSampling(nn.Module):

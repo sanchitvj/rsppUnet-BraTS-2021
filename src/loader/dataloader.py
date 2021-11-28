@@ -33,7 +33,7 @@ def get_augmentations(phase, IMG_SIZE):
     return list_trfms
 
 
-def pad_or_crop_image(image, seg=None, target_size=(128, 144, 144)):
+def pad_or_crop_image(image, seg=None, target_size=(128, 128, 128)):
     c, z, y, x = image.shape
     z_slice, y_slice, x_slice = [
         get_crop_slice(target, dim) for target, dim in zip(target_size, (z, y, x))
@@ -134,8 +134,9 @@ class BratsDataset(Dataset):
 
             # if self.is_resize:
             #     mask = self.resize(mask, self.size)
-            mask = np.clip(mask.astype(np.uint8), 0, 1).astype(np.float32)
-            mask = np.clip(mask, 0, 1)
+            # TODO: check below
+            # mask = np.clip(mask.astype(np.uint8), 0, 1).astype(np.float32)
+            # mask = np.clip(mask, 0, 1)
 
             # TODO: Test this
             img, mask = pad_or_crop_image(img, mask, target_size=self.size)
@@ -176,9 +177,9 @@ class BratsDataset(Dataset):
         data_min = np.min(data)
         return (data - data_min) / (np.max(data) - data_min)
 
-    def resize(self, data: np.ndarray, size):
-        data = resize(data, size, preserve_range=True)
-        return data
+    # def resize(self, data: np.ndarray, size):
+    #     data = resize(data, size, preserve_range=True)
+    #     return data
 
     def preprocess_mask_labels(self, mask: np.ndarray):
 

@@ -5,6 +5,8 @@ from numpy import logical_and as l_and, logical_not as l_not
 import matplotlib.pyplot as plt
 from pprint import pprint
 from scipy.spatial.distance import directed_hausdorff
+from torch.utils.data._utils.collate import default_collate
+import torch.nn.functional as F
 
 
 HAUSSDORF = "haussdorf"
@@ -28,7 +30,7 @@ def save_args(args):
     config = vars(args).copy()
     del config["save_folder"]
     del config["seg_folder"]
-    pprint.pprint(config)
+    pprint(config)
     config_file = args.save_folder / (args.exp_name + ".yaml")
     with config_file.open("w") as file:
         yaml.dump(config, file)
@@ -92,6 +94,48 @@ def save_metrics(
     for key, value in metrics.items():
         tag = f"val{'_teacher' if teacher else ''}{'_swa' if swa else ''}/{key}_Dice"
         writer.add_scalar(tag, np.nanmean(value), global_step=epoch)
+
+
+def determinist_collate(batch):
+    batch = pad_batch_to_max_shape(batch)
+    return default_collate(batch)
+
+
+def pad_batch_to_max_shape(batch):
+    shapes = (sample["mask"].shape for sample in batch)
+    _, z_sizes, y_sizes, x_sizes = list(zip(*shapes))
+    maxs = [int(max(z_sizes)), int(max(y_sizes)), int(max(x_sizes))]
+    for i, max_ in enumerate(maxs):
+        max_stride = 16
+        if max_ % max_stride != 0:
+            # Make it divisible by 16
+            maxs[i] = ((max_ // max_stride) + 1) * max_stride
+    zmax, ymax, xmax = maxs
+    for elem in batch:
+        exple = elem["mask"]
+        zpad, ypad, xpad = (
+            zmax - exple.shape[1],
+            ymax - exple.shape[2],
+            xmax - exple.shape[3],
+        )
+        assert all(
+            pad >= 0 for pad in (zpad, ypad, xpad)
+        ), "Negative padding value error !!"
+        # free data augmentation
+        left_zpad, left_ypad, left_xpad = [
+            random.randint(0, pad) for pad in (zpad, ypad, xpad)
+        ]
+        right_zpad, right_ypad, right_xpad = [
+            pad - left_pad
+            for pad, left_pad in zip(
+                (zpad, ypad, xpad), (left_zpad, left_ypad, left_xpad)
+            )
+        ]
+        pads = (left_xpad, right_xpad, left_ypad, right_ypad, left_zpad, right_zpad)
+        elem["image"], elem["mask"] = F.pad(
+            torch.from_numpy(elem["image"]), pads
+        ), F.pad(torch.from_numpy(elem["mask"]), pads)
+    return batch
 
 
 def calculate_metrics(preds, targets, patient, tta=False):

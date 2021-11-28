@@ -1,7 +1,7 @@
 import argparse, os, time, pathlib
 from datetime import datetime
 import numpy as np
-from tqdm.auto import tqdm
+from tqdm import tqdm
 
 import torch
 from torch.optim import Adam, AdamW
@@ -10,7 +10,7 @@ from torch.utils.data import DataLoader
 from model.unet import NvNet
 from loader.dataloader import get_dataset
 from loss import EDiceLoss, SoftDiceLossSquared
-from utils import save_args, seed_torch
+from utils import save_args, seed_torch, determinist_collate
 from train import trainer
 
 # from utils import AverageMeter,
@@ -18,15 +18,21 @@ from train import trainer
 parser = argparse.ArgumentParser(description="BraTS Training")
 
 parser.add_argument(
+    "-d",
     "--device",
     required=True,
     type=str,
+    default="cpu",
     help="Set the CUDA_VISIBLE_DEVICES env var from this string",
 )
-parser.add_argument("-p", "--data_path")
+parser.add_argument(
+    "-p",
+    "--data_path",
+    default="/home/sanchit/Segmentation Research/BraTS Data/loader_test",
+)
 parser.add_argument(
     "-j",
-    "--workers",
+    "--num_workers",
     default=16,
     type=int,
     metavar="N",
@@ -45,14 +51,14 @@ parser.add_argument(
 parser.add_argument(
     "-b",
     "--batch-size",
-    default=2,
+    default=4,
     type=int,
     metavar="N",
     help="mini-batch size (default: 1)",
 )
 parser.add_argument(
     "-i",
-    "img_size",
+    "--img_size",
     default=(128, 128, 128),
     type=int,
     help="image size (default: (128,128,128))",
@@ -83,8 +89,8 @@ parser.add_argument(
     metavar="PATH",
     help="path to latest checkpoint. Warning: untested option",
 )
-parser.add_argument("--debug", action="store_true")
-parser.add_argument("--no_fp16", action="store_true")
+parser.add_argument("--debug", action="store_true", default=False)
+# parser.add_argument("--no_fp16", action="store_true")
 parser.add_argument("--seed", default=16111990, help="seed for train/val split")
 parser.add_argument("--warm", default=3, type=int, help="number of warming up epochs")
 
@@ -124,10 +130,10 @@ def main(args, fold_num):
 
     ngpus = torch.cuda.device_count()
     print(f"Working with {ngpus} GPUs")
-    print(torch.cuda.get_device_name(0))
+    print("GPU Name: ", torch.cuda.get_device_name(0))
     seed_torch(args.seed)
     current_exp_time = datetime.now().strftime("%Y%m%d_%T").replace(":", "")
-    print(current_exp_time)
+    print("Current experiment time: ", current_exp_time)
     args.exp_name = (
         f"{'debug_' if args.debug else ''}{current_exp_time}_"
         f"_fold{fold_num if not args.full else 'FULL'}"
@@ -155,7 +161,7 @@ def main(args, fold_num):
     model_config = {
         "input_shape": (args.batch_size, 32, [args.img_size]),
         "output_channel": 3,
-        "n_labels": 4,
+        "n_labels": 3,
         "activation": args.activation,
         "normalization": args.normalization,
     }
@@ -180,11 +186,12 @@ def main(args, fold_num):
         model.parameters(), args.lr, weight_decay=args.weight_decay, eps=1e-4
     )
     # TODO: add warm up and experiment with parameters
-    scheduler = CosineAnnealingLR(optimizer, args.epochs + round(args.epoch * 0.5))
+    scheduler = CosineAnnealingLR(optimizer, args.epochs + round(args.epochs * 0.5))
 
     train_dataset, val_dataset = get_dataset(
         args.data_path,
-        args.size,
+        args.seed,
+        args.img_size,
         fold_num,
         args.debug,
         n_splits=5,
@@ -196,14 +203,17 @@ def main(args, fold_num):
         num_workers=args.num_workers,
         pin_memory=True,  # INFO: https://discuss.pytorch.org/t/when-to-set-pin-memory-to-true/19723/2
         drop_last=True,
+        # INFO: https://discuss.pytorch.org/t/runtimeerror-stack-expects-each-tensor-to-be-equal-size-but-got-3-224-224-at-entry-0-and-3-224-336-at-entry-3/87211/23
+        collate_fn=determinist_collate,
     )
     val_loader = DataLoader(
         val_dataset,
-        batch_size=args.batch_size / 2,
+        batch_size=int(args.batch_size / 2),
         shuffle=False,
         num_workers=args.num_workers,
         pin_memory=False,
         drop_last=False,
+        collate_fn=determinist_collate,
     )
 
     best = np.inf
@@ -266,6 +276,6 @@ def main(args, fold_num):
 if __name__ == "__main__":
 
     arguments = parser.parse_args()
-    os.environ["CUDA_VISIBLE_DEVICES"] = arguments.devices
+    # os.environ["CUDA_VISIBLE_DEVICES"] = arguments.devices
     for fold in range(5):
         main(arguments, fold)
