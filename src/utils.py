@@ -101,6 +101,25 @@ def determinist_collate(batch):
     return default_collate(batch)
 
 
+def pad_batch1_to_compatible_size(batch):
+    print(batch.shape)
+    shape = batch.shape
+    zyx = list(shape[-3:])
+    for i, dim in enumerate(zyx):
+        max_stride = 16
+        if dim % max_stride != 0:
+            # Make it divisible by 16
+            zyx[i] = ((dim // max_stride) + 1) * max_stride
+    zmax, ymax, xmax = zyx
+    zpad, ypad, xpad = zmax - batch.size(2), ymax - batch.size(3), xmax - batch.size(4)
+    assert all(
+        pad >= 0 for pad in (zpad, ypad, xpad)
+    ), "Negative padding value error !!"
+    pads = (0, xpad, 0, ypad, 0, zpad)
+    batch = F.pad(batch, pads)
+    return batch, (zpad, ypad, xpad)
+
+
 def pad_batch_to_max_shape(batch):
     shapes = (sample["mask"].shape for sample in batch)
     _, z_sizes, y_sizes, x_sizes = list(zip(*shapes))
@@ -201,6 +220,7 @@ def calculate_metrics(preds, targets, patient, tta=False):
 
 # from NVnet
 def dice_coefficient(outputs, targets, threshold=0.5, eps=1e-8):
+    outputs, targets = outputs.to("cpu"), targets.to("cpu")
     batch_size = targets.size(0)
     y_pred = outputs[:, 0, :, :, :]
     y_truth = targets[:, 0, :, :, :]

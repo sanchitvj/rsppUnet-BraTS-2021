@@ -30,10 +30,11 @@ parser.add_argument(
     "--data_path",
     default="/home/sanchit/Segmentation Research/BraTS Data/loader_test",
 )
+# INFO: https://discuss.pytorch.org/t/guidelines-for-assigning-num-workers-to-dataloader/813/5
 parser.add_argument(
     "-j",
     "--num_workers",
-    default=16,
+    default=4,
     type=int,
     metavar="N",
     help="number of data loading workers (default: 16).",
@@ -159,7 +160,7 @@ def main(args, fold_num):
     # TODO: add logger
 
     model_config = {
-        "input_shape": (args.batch_size, 32, [args.img_size]),
+        "input_shape": (args.batch_size, 4, [128, 128, 128]),
         "output_channel": 3,
         "n_labels": 3,
         "activation": args.activation,
@@ -232,8 +233,8 @@ def main(args, fold_num):
             metric,
             args.device,
         )
-        print(f"Training loss at the end of epoch {epoch} is: {t_loss}")
-        print(f"Training accuracy at the end of epoch {epoch} is: {t_acc}")
+        print(f"Training loss at the end of epoch {epoch+1} is: {t_loss}")
+        print(f"Training accuracy at the end of epoch {epoch+1} is: {t_acc}")
 
         # NOTE: validating after every epoch
         model.eval()
@@ -250,8 +251,8 @@ def main(args, fold_num):
                 metric,
                 args.device,
             )
-            print(f"Validation loss at the end of epoch {epoch} is: {v_loss}")
-            print(f"Validation accuracy at the end of epoch {epoch} is: {v_acc}")
+            print(f"Validation loss at the end of epoch {epoch+1} is: {v_loss}")
+            print(f"Validation accuracy at the end of epoch {epoch+1} is: {v_acc}")
 
         if v_loss < best:
             best = v_loss
@@ -263,7 +264,7 @@ def main(args, fold_num):
                     optimizer=optimizer.state_dict(),
                     scheduler=scheduler.state_dict(),
                 ),
-                save_folder=f"{args.save_folder}/model_best_epoch{epoch}.pth",
+                f"{args.save_folder}/model_best_epoch{epoch}.pth",
             )
 
         if epoch / args.epochs > 0.5:
