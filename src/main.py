@@ -1,10 +1,16 @@
 import argparse, os, time, pathlib
+from logging import warn
 from datetime import datetime
 import numpy as np
 from tqdm import tqdm
+import warnings
+
+warnings.filterwarnings("ignore")
 
 import wandb
-from logger.wandb_creds import get_wandb_creds
+from logger.wandb_creds import get_wandb_credentials
+
+wandb.login(key=get_wandb_credentials(person="sanchit"))
 
 import torch
 from torch.optim import Adam, AdamW
@@ -31,7 +37,7 @@ parser.add_argument(
 parser.add_argument(
     "-p",
     "--data_path",
-    default="/home/sanchit/Segmentation Research/BraTS Data/loader_test",
+    default="/nfs/Workspace/brats_brain_segmentation/data/BraTS2021_data/training",
 )
 # INFO: https://discuss.pytorch.org/t/guidelines-for-assigning-num-workers-to-dataloader/813/5
 parser.add_argument(
@@ -145,7 +151,7 @@ def main(args, fold_num):
         f"_optim{args.optim}"
         f"_{args.optim}"
         f"_lr{args.lr}-wd{args.weight_decay}_epochs{args.epochs}"
-        f"_{'fp16' if not args.no_fp16 else 'fp32'}"
+        # f"_{'fp16' if not args.no_fp16 else 'fp32'}"
         f"_warm{args.warm}_"
         f"_norm{args.normalization}{'_swa' + str(args.swa_repeat) if args.swa else ''}"
         f"_dropout{args.dropout}"
@@ -161,8 +167,7 @@ def main(args, fold_num):
     save_args(args)
 
     # TODO: add logger
-    wandb.login(key = get_wandb_creds())
-
+    # wandb.login(key=get_wandb_creds())
 
     model_config = {
         "input_shape": (args.batch_size, 4, [128, 128, 128]),
@@ -171,7 +176,6 @@ def main(args, fold_num):
         "activation": args.activation,
         "normalization": args.normalization,
     }
-
 
     # TODO: change the name of the architecture
     model = NvNet(model_config)
@@ -209,24 +213,24 @@ def main(args, fold_num):
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
-        pin_memory=True,  # INFO: https://discuss.pytorch.org/t/when-to-set-pin-memory-to-true/19723/2
+        pin_memory=False,  # INFO: https://discuss.pytorch.org/t/when-to-set-pin-memory-to-true/19723/2
         drop_last=True,
         # INFO: https://discuss.pytorch.org/t/runtimeerror-stack-expects-each-tensor-to-be-equal-size-but-got-3-224-224-at-entry-0-and-3-224-336-at-entry-3/87211/23
-        collate_fn=determinist_collate,
+        # collate_fn=determinist_collate,
     )
     val_loader = DataLoader(
         val_dataset,
-        batch_size=int(args.batch_size / 2),
+        batch_size=args.batch_size,
         shuffle=False,
         num_workers=args.num_workers,
         pin_memory=False,
         drop_last=False,
-        collate_fn=determinist_collate,
+        # collate_fn=determinist_collate,
     )
 
     best = np.inf
 
-    wandb.init(project='Brats_21_Segmentation', config = model_config)
+    wandb.init(project="Brats_21_Segmentation", config=model_config)
 
     for epoch in range(args.epochs):
 
@@ -274,7 +278,7 @@ def main(args, fold_num):
                     optimizer=optimizer.state_dict(),
                     scheduler=scheduler.state_dict(),
                 ),
-                f"{args.save_folder}/model_best_epoch{epoch}.pth",
+                f"/nfs/Workspace/brats_brain_segmentation/save_folder/model_best_epoch{epoch}.pth",
             )
 
         if epoch / args.epochs > 0.5:

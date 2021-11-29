@@ -16,8 +16,9 @@ from loss import SoftDiceLossSquared
 
 from utils import AverageMeter, save_metrics, calculate_metrics, dice_coefficient
 
-#Setting up logging stuff
+# Setting up logging stuff
 import wandb
+
 # Below function can also be used for validation
 # INFO: https://discuss.pytorch.org/t/mixed-precision-in-evaluation/94184
 
@@ -51,7 +52,7 @@ def trainer(
 
         data_time.update(time.perf_counter() - start_point)
         # INFO: https://stackoverflow.com/questions/55563376/pytorch-how-does-pin-memory-work-in-dataloader
-        images = batch["image"].to(device, non_blocking=True)
+        images = batch["image"].to(device)  # , non_blocking=True)
         labels = batch["mask"].to(device)
 
         # TODO: check floating point precision
@@ -66,7 +67,9 @@ def trainer(
             else:
                 print("NaN in model loss!!")
 
-            accuracy = dice_coefficient(logits, labels, threshold=0.5, eps=1e-8)
+            accuracy = dice_coefficient(
+                logits.cpu(), labels.cpu(), threshold=0.5, eps=1e-8
+            )
             accuracies.update(accuracy, batch["image"].size(0))
 
             if not model.training:
@@ -89,37 +92,34 @@ def trainer(
         batch_time.update(time.perf_counter() - start_point)
         start_point = time.perf_counter()
 
-        #For Logging on a batch basis
+        # For Logging on a batch basis
 
-        if phase == "Training":
-            wandb.log({
-                "Train Dice Loss" : loss,
-                "Train Class 0 Dice": metric_[0],
-                "Train Class 1 Dice": metric_[1],
-                "Train Class 2 Dice": metric_[2]
-            })
-        elif phase == "Validating":
-            wandb.log({
-                "Valid Dice Loss" : loss,
-                "Valid Class 0 Dice": metric_[0],
-                "Valid Class 1 Dice": metric_[1],
-                "Valid Class 2 Dice": metric_[2]
-            })
+        # if phase == "Training":
+        #     wandb.log(
+        #         {
+        #             "Train Dice Loss": loss,
+        #             "Train Class 0 Dice": metric_[0][0],
+        #             "Train Class 1 Dice": metric_[0][1],
+        #             "Train Class 2 Dice": metric_[0][2],
+        #         }
+        #     )
+        # elif phase == "Validating":
+        #     wandb.log(
+        #         {
+        #             "Valid Dice Loss": loss,
+        #             "Valid Class 0 Dice": metric_[0][0],
+        #             "Valid Class 1 Dice": metric_[0][1],
+        #             "Valid Class 2 Dice": metric_[0][2],
+        #         }
+        #     )
 
     # TODO: add wandb logger
 
-    """
-    #Remove this comment for logging on epoch basis
+    # Remove this comment for logging on epoch basis
     if phase == "Training":
-        wandb.log({
-        "Train Dice Loss" : loss
-        })
+        wandb.log({"Train Dice Loss": loss})
     elif phase == "Validating":
-        wandb.log({
-            "Valid Dice Loss" : loss
-        })
-
-    """
+        wandb.log({"Valid Dice Loss": loss})
 
     # if not model.training:
     # save_metrics(epoch, metrics, swa, logger, epoch, False, save_folder)

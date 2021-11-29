@@ -220,7 +220,7 @@ def calculate_metrics(preds, targets, patient, tta=False):
 
 # from NVnet
 def dice_coefficient(outputs, targets, threshold=0.5, eps=1e-8):
-    outputs, targets = outputs.to("cpu"), targets.to("cpu")
+    # outputs, targets = outputs.to("cpu"), targets.to("cpu")
     batch_size = targets.size(0)
     y_pred = outputs[:, 0, :, :, :]
     y_truth = targets[:, 0, :, :, :]

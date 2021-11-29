@@ -95,7 +95,7 @@ class EDiceLoss(nn.Module):
         if metric_mode:
             inputs = inputs > 0.5
             if targets.sum() == 0:
-                print(f"No {self.labels[label_index]} for this patient")
+                # print(f"No {self.labels[label_index]} for this patient")
                 if inputs.sum() == 0:
                     return torch.tensor(1.0, device="cuda")
                 else:
