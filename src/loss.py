@@ -14,6 +14,7 @@ def sum_tensor(inp, axes, keepdim=False):
     return inp
 
 
+# TODO: add metrics mode in Soft Dl.
 # Taken from NNUnet
 class SoftDiceLossSquared(nn.Module):
     def __init__(self, apply_nonlin=None, batch_dice=False, do_bg=True, smooth=1.0):
@@ -27,9 +28,9 @@ class SoftDiceLossSquared(nn.Module):
         self.apply_nonlin = apply_nonlin
         self.smooth = smooth
 
-    def forward(self, x, y, loss_mask=None):
-        shp_x = x.shape
-        shp_y = y.shape
+    def forward(self, inputs, targets, loss_mask=None):
+        shp_x = inputs.shape
+        shp_y = targets.shape
 
         if self.batch_dice:
             axes = [0] + list(range(2, len(shp_x)))
@@ -37,25 +38,25 @@ class SoftDiceLossSquared(nn.Module):
             axes = list(range(2, len(shp_x)))
 
         if self.apply_nonlin is not None:
-            x = self.apply_nonlin(x)
+            inputs = self.apply_nonlin(inputs)
 
         with torch.no_grad():
             if len(shp_x) != len(shp_y):
-                y = y.view((shp_y[0], 1, *shp_y[1:]))
+                targets = targets.view((shp_y[0], 1, *shp_y[1:]))
 
-            if all([i == j for i, j in zip(x.shape, y.shape)]):
+            if all([i == j for i, j in zip(inputs.shape, targets.shape)]):
                 # if this is the case then gt is probably already a one hot encoding
-                y_onehot = y
+                y_onehot = targets
             else:
-                y = y.long()
+                targets = targets.long()
                 y_onehot = torch.zeros(shp_x)
-                if x.device.type == "cuda":
-                    y_onehot = y_onehot.cuda(x.device.index)
-                y_onehot.scatter_(1, y, 1).float()
+                if inputs.device.type == "cuda":
+                    y_onehot = y_onehot.cuda(inputs.device.index)
+                y_onehot.scatter_(1, targets, 1).float()
 
-        intersect = x * y_onehot
+        intersect = inputs * y_onehot
         # values in the denominator get smoothed
-        denominator = x ** 2 + y_onehot ** 2
+        denominator = inputs ** 2 + y_onehot ** 2
 
         # aggregation was previously done in get_tp_fp_fn, but needs to be done here now (needs to be done after
         # squaring)
@@ -70,8 +71,27 @@ class SoftDiceLossSquared(nn.Module):
             else:
                 dc = dc[:, 1:]
         dc = dc.mean()
+        # dc -> 1-dc
+        return 1 - dc
 
-        return -dc
+
+#     def forward(self, inputs, target):
+#         dice = 0
+#         for i in range(target.size(1)):
+#             dice = dice + self.binary_dice(inputs[:, i, ...], target[:, i, ...])
+
+#         final_dice = dice / target.size(1)
+#         return final_dice
+
+
+#     def metric(self, inputs, target):
+#         dices = []
+#         for j in range(target.size(0)):
+#             dice = []
+#             for i in range(target.size(1)):
+#                 dice.append(self.binary_dice(inputs[j, i], target[j, i], i))
+#             dices.append(dice)
+#         return dices
 
 
 import torch

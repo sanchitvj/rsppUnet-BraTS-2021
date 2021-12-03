@@ -83,14 +83,26 @@ class BratsDataset(Dataset):
         self,
         data,
         size,
+        teacher_model=False,
         phase: str = "test",
     ):
 
         self.data = data
         self.phase = phase
         self.augmentations = get_augmentations(phase, size)
-        self.data_types = ["_flair.nii.gz", "_t1.nii.gz", "_t1ce.nii.gz", "_t2.nii.gz"]
         self.size = size
+        self.teacher_model = teacher_model
+        if self.teacher_model:
+            self.data_types = ["_flair.nii", "_t1.nii", "_t1ce.nii", "_t2.nii"]
+            self.seg_type = "_seg.nii"
+        else:
+            self.data_types = [
+                "_flair.nii.gz",
+                "_t1.nii.gz",
+                "_t1ce.nii.gz",
+                "_t2.nii.gz",
+            ]
+            self.seg_type = "_seg.nii.gz"
 
     def __len__(self):
         return len(self.data)
@@ -108,33 +120,33 @@ class BratsDataset(Dataset):
             img = self.load_img(img_path)  # .transpose(2, 0, 1)
             img = self.normalize(img)
             images.append(img)
+
         img = np.stack(images)
 
+        # FIXME: preprocessing removed; collate not working.
         # Remove maximum extent of the zero-background to make future crop more useful
-        z_indexes, y_indexes, x_indexes = np.nonzero(np.sum(img, axis=0) != 0)
+        #        z_indexes, y_indexes, x_indexes = np.nonzero(np.sum(img, axis=0) != 0)
         # Add 1 pixel in each side
-        zmin, ymin, xmin = [
-            max(0, int(np.min(arr) - 1)) for arr in (z_indexes, y_indexes, x_indexes)
-        ]
-        zmax, ymax, xmax = [
-            int(np.max(arr) + 1) for arr in (z_indexes, y_indexes, x_indexes)
-        ]
-        img = img[:, zmin:zmax, ymin:ymax, xmin:xmax]
-        # if self.is_resize:
-        #     img = self.resize(img, self.size)
+        #        zmin, ymin, xmin = [
+        #            max(0, int(np.min(arr) - 1)) for arr in (z_indexes, y_indexes, x_indexes)
+        #        ]
+        #       zmax, ymax, xmax = [
+        #          int(np.max(arr) + 1) for arr in (z_indexes, y_indexes, x_indexes)
+        #     ]
+        #    img = img[:, zmin:zmax, ymin:ymax, xmin:xmax]
+
         img = np.moveaxis(img, (0, 1, 2, 3), (0, 3, 2, 1))
 
         if self.phase != "test":
-            mask_name = dir_name + "_seg.nii.gz"
+            mask_name = dir_name + self.seg_type
             mask_path = os.path.join(root_path, mask_name)
             mask = self.load_img(mask_path)
 
             mask = self.preprocess_mask_labels(mask)
-            mask = mask[:, zmin:zmax, ymin:ymax, xmin:xmax]
+            #       mask = mask[:, zmin:zmax, ymin:ymax, xmin:xmax]
 
             # if self.is_resize:
             #     mask = self.resize(mask, self.size)
-            # TODO: check below
             # mask = np.clip(mask.astype(np.uint8), 0, 1).astype(np.float32)
             # mask = np.clip(mask, 0, 1)
 
@@ -177,9 +189,9 @@ class BratsDataset(Dataset):
         data_min = np.min(data)
         return (data - data_min) / (np.max(data) - data_min)
 
-    # def resize(self, data: np.ndarray, size):
-    #     data = resize(data, size, preserve_range=True)
-    #     return data
+    def resize(self, data: np.ndarray, size):
+        data = resize(data, size, preserve_range=True)
+        return data
 
     def preprocess_mask_labels(self, mask: np.ndarray):
 
@@ -209,8 +221,9 @@ def get_dataset(
     seed,
     size,
     fold_num,
-    debug,
-    n_splits,
+    teacher_model,
+    debug=False,
+    n_splits=5,
 ):
     train_dir = []
     for filename in os.listdir(data_path):
@@ -225,18 +238,18 @@ def get_dataset(
     train = [train_dir[i] for i in train_idx]
     val = [train_dir[i] for i in val_idx]
 
-    train_dataset = BratsDataset(train, size, phase="train")
-    val_dataset = BratsDataset(val, size, phase="val")
+    train_dataset = BratsDataset(train, size, teacher_model, phase="train")
+    val_dataset = BratsDataset(val, size, teacher_model, phase="val")
     return train_dataset, val_dataset
 
 
 # if __name__ == "__main__":
 
-#     train_dir = "/home/sanchit/Segmentation Research/BraTS Data/loader_test/"  # "../data/brats21/BraTS_2021_training"
+#     train_dir = "/nfs/Workspace/brats_brain_segmentation/data/BraTS2020_data/training"  # "../data/brats21/BraTS_2021_training"
 #     start1 = time.time()
 #     for i in range(2):
 #         start2 = time.time()
-#         train_dataset, val_dataset = get_dataset(train_dir, 1111, fold_num=i)
+#         train_dataset, val_dataset = get_dataset(train_dir, 1111, (160,160,160), fold_num=i, teacher_model=True)
 
 #         train_loader = DataLoader(
 #             train_dataset, batch_size=1, shuffle=True, num_workers=4
@@ -245,9 +258,10 @@ def get_dataset(
 #         # train_data = next(iter(train_loader))
 #         # val_data = next(iter(val_loader))
 #         loader = tqdm(train_loader, total=len(train_loader))
-#         for step, batch in enumerate(loader):
+#         for step, batch in enumerate(tqdm(loader)):
 #             if i % 400 == 0:
-#                 print(step, batch["image"].shape)
+# #                 print(step, batch["image"].shape)
+#                 pass
 #         print(f"time taken for fold {i}: {time.time() - start2}")
 #     print("total time: ", (time.time() - start1))
 # print(len(train_loader), len(val_loader))

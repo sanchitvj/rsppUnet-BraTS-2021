@@ -45,7 +45,7 @@ class EncoderBlock(nn.Module):
         padding=1,
         num_groups=8,
         activation="relu",
-        normalization="group_normalization",
+        normalization="batch",
     ):
         super(EncoderBlock, self).__init__()
 
@@ -54,6 +54,10 @@ class EncoderBlock(nn.Module):
         if normalization == "group_normalization":
             self.norm1 = nn.GroupNorm(num_groups=num_groups, num_channels=inChans)
             self.norm2 = nn.GroupNorm(num_groups=num_groups, num_channels=inChans)
+        else:
+            # NOTE: Check for parameter 'affine'
+            self.norm1 = nn.BatchNorm3d(num_features=inChans)
+            self.norm2 = nn.BatchNorm3d(num_features=inChans)
         # print(self.norm1)
         if activation == "relu":
             self.actv1 = nn.ReLU(inplace=True)
@@ -135,6 +139,10 @@ class DecoderBlock(nn.Module):
         if normalization == "group_normalization":
             self.norm1 = nn.GroupNorm(num_groups=num_groups, num_channels=outChans)
             self.norm2 = nn.GroupNorm(num_groups=num_groups, num_channels=outChans)
+        else:
+            # NOTE: Check for parameter 'affine'
+            self.norm1 = nn.BatchNorm3d(num_features=inChans)
+            self.norm2 = nn.BatchNorm3d(num_features=inChans)
         if activation == "relu":
             self.actv1 = nn.ReLU(inplace=True)
             self.actv2 = nn.ReLU(inplace=True)

@@ -157,7 +157,7 @@ def pad_batch_to_max_shape(batch):
     return batch
 
 
-def calculate_metrics(preds, targets, patient, tta=False):
+def calculate_metrics(preds, targets, patient=None, tta=False):
     """
 
     Parameters
@@ -171,7 +171,7 @@ def calculate_metrics(preds, targets, patient, tta=False):
     tta:
         is tta performed for this run
     """
-    pp = pprint.PrettyPrinter(indent=4)
+    # pp = pprint.PrettyPrinter(indent=4)
     assert preds.shape == targets.shape, "Preds and targets do not have the same size"
 
     labels = ["ET", "TC", "WT"]
@@ -179,13 +179,13 @@ def calculate_metrics(preds, targets, patient, tta=False):
     metrics_list = []
     for i, label in enumerate(labels):
         metrics = dict(
-            patient_id=patient,
+            #             patient_id=patient,
             label=label,
             tta=tta,
         )
 
         if np.sum(targets[i]) == 0:
-            print(f"{label} not present for {patient}")
+            #             print(f"{label} not present for {patient}")
             sens = np.nan
             dice = 1 if np.sum(preds[i]) == 0 else 0
             tn = np.sum(l_and(l_not(preds[i]), l_not(targets[i])))
@@ -212,7 +212,7 @@ def calculate_metrics(preds, targets, patient, tta=False):
         metrics[DICE] = dice
         metrics[SENS] = sens
         metrics[SPEC] = spec
-        pp.pprint(metrics)
+        # pp.pprint(metrics)
         metrics_list.append(metrics)
 
     return metrics_list
@@ -230,4 +230,4 @@ def dice_coefficient(outputs, targets, threshold=0.5, eps=1e-8):
     union = torch.sum(y_pred) + torch.sum(y_truth) + eps
     dice = 2 * intersection / union
 
-    return dice / batch_size
+    return dice

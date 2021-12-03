@@ -10,8 +10,6 @@ warnings.filterwarnings("ignore")
 import wandb
 from logger.wandb_creds import get_wandb_credentials
 
-wandb.login(key=get_wandb_credentials(person="sanchit"))
-
 import torch
 from torch.optim import Adam, AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
@@ -37,7 +35,13 @@ parser.add_argument(
 parser.add_argument(
     "-p",
     "--data_path",
-    default="/nfs/Workspace/brats_brain_segmentation/data/BraTS2021_data/training",
+    default="/nfs/Workspace/brats_brain_segmentation/data/BraTS2020_data/training",
+)
+parser.add_argument(
+    "-t",
+    "--teacher_model",
+    default=False,
+    help="Make it true for training on 2020 dataset",
 )
 # INFO: https://discuss.pytorch.org/t/guidelines-for-assigning-num-workers-to-dataloader/813/5
 parser.add_argument(
@@ -56,12 +60,12 @@ parser.add_argument(
     help="manual epoch number (useful on restarts)",
 )
 parser.add_argument(
-    "--epochs", default=20, type=int, metavar="N", help="number of total epochs to run"
+    "--epochs", default=15, type=int, metavar="N", help="number of total epochs to run"
 )
 parser.add_argument(
     "-b",
     "--batch-size",
-    default=4,
+    default=1,
     type=int,
     metavar="N",
     help="mini-batch size (default: 1)",
@@ -69,14 +73,14 @@ parser.add_argument(
 parser.add_argument(
     "-i",
     "--img_size",
-    default=(128, 128, 128),
+    default=(160, 160, 160),
     type=int,
     help="image size (default: (128,128,128))",
 )
 parser.add_argument(
     "--lr",
     "--learning-rate",
-    default=1e-4,
+    default=0.00025,
     type=float,
     metavar="LR",
     help="initial learning rate",
@@ -85,7 +89,7 @@ parser.add_argument(
 parser.add_argument(
     "--wd",
     "--weight-decay",
-    default=0.001,
+    default=1e-7,
     type=float,
     metavar="W",
     help="weight decay (default: 0)",
@@ -101,7 +105,7 @@ parser.add_argument(
 )
 parser.add_argument("--debug", action="store_true", default=False)
 # parser.add_argument("--no_fp16", action="store_true")
-parser.add_argument("--seed", default=16111990, help="seed for train/val split")
+parser.add_argument("--seed", default=12536, help="seed for train/val split")
 parser.add_argument("--warm", default=3, type=int, help="number of warming up epochs")
 
 parser.add_argument(
@@ -120,7 +124,7 @@ parser.add_argument(
     "--swa_repeat", type=int, default=5, help="how many warm restarts to perform"
 )
 parser.add_argument(
-    "--optim", choices=["adam", "sgd", "ranger", "adamw"], default="ranger"
+    "--optim", choices=["adam", "sgd", "ranger", "adamw"], default="adam"
 )
 parser.add_argument("--com", help="add a comment to this run!")
 parser.add_argument(
@@ -137,6 +141,8 @@ parser.add_argument(
 
 
 def main(args, fold_num):
+
+    wandb.login(key=get_wandb_credentials(person="sanchit"))
 
     ngpus = torch.cuda.device_count()
     print(f"Working with {ngpus} GPUs")
@@ -170,7 +176,7 @@ def main(args, fold_num):
     # wandb.login(key=get_wandb_creds())
 
     model_config = {
-        "input_shape": (args.batch_size, 4, [128, 128, 128]),
+        "input_shape": (args.batch_size, 4, [args.img_size]),
         "output_channel": 3,
         "n_labels": 3,
         "activation": args.activation,
@@ -189,8 +195,9 @@ def main(args, fold_num):
     # else:
     model = model.to(args.device)
 
-    criterion = EDiceLoss().to(args.device)
-    metric = criterion.metric
+    criterion = SoftDiceLossSquared().to(args.device)
+    #     metric = criterion.metric
+    metric = None
     # print(metric)
 
     # TODO: play with optimizers
@@ -205,6 +212,7 @@ def main(args, fold_num):
         args.seed,
         args.img_size,
         fold_num,
+        args.teacher_model,
         args.debug,
         n_splits=5,
     )
@@ -213,7 +221,7 @@ def main(args, fold_num):
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,
-        pin_memory=False,  # INFO: https://discuss.pytorch.org/t/when-to-set-pin-memory-to-true/19723/2
+        pin_memory=True,  # INFO: https://discuss.pytorch.org/t/when-to-set-pin-memory-to-true/19723/2
         drop_last=True,
         # INFO: https://discuss.pytorch.org/t/runtimeerror-stack-expects-each-tensor-to-be-equal-size-but-got-3-224-224-at-entry-0-and-3-224-336-at-entry-3/87211/23
         # collate_fn=determinist_collate,
@@ -230,7 +238,7 @@ def main(args, fold_num):
 
     best = np.inf
 
-    wandb.init(project="Brats_21_Segmentation", config=model_config)
+    wandb.init(project=f"BraTS fold {fold_num+1}", config=model_config)
 
     for epoch in range(args.epochs):
 
@@ -278,14 +286,14 @@ def main(args, fold_num):
                     optimizer=optimizer.state_dict(),
                     scheduler=scheduler.state_dict(),
                 ),
-                f"/nfs/Workspace/brats_brain_segmentation/save_folder/model_best_epoch{epoch}.pth",
+                f"/nfs/Workspace/brats_brain_segmentation/save_folder/model_{v_acc}_fold{fold_num}.pth",
             )
 
         if epoch / args.epochs > 0.5:
             scheduler.step()
             print("scheduler stepped!")
 
-    wandb.run.name = f"BRATS_RUN_F{fold_num}"
+    wandb.run.name = f"BRATS_RUN_F{fold_num+1}"
     wandb.run.save()
     # TODO: generate segmentation maps
 
@@ -295,4 +303,6 @@ if __name__ == "__main__":
     arguments = parser.parse_args()
     # os.environ["CUDA_VISIBLE_DEVICES"] = arguments.devices
     for fold in range(5):
+        print(" ")
+        print(f"Fold {fold+1} statrting!!!")
         main(arguments, fold)

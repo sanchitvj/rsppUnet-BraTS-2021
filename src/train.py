@@ -1,6 +1,9 @@
-import time
+import time, warnings
+
+warnings.filterwarnings("ignore")
+
 from datetime import datetime
-from tqdm.auto import tqdm
+from tqdm import tqdm
 import numpy as np
 import pandas as pd
 import torch
@@ -35,7 +38,8 @@ def trainer(
     metric,
     device,
 ):
-
+    print(" ")
+    print(f"TRAINING EPOCH {epoch}")
     batch_time = AverageMeter("Time", ":6.3f")
     data_time = AverageMeter("Data", ":6.3f")
     losses = AverageMeter("Loss", ":.4e")
@@ -47,8 +51,8 @@ def trainer(
     start_point = time.perf_counter()
 
     metrics = []
-    loader = tqdm(train_loader, total=len(train_loader))
-    for i, batch in enumerate(loader):
+    #     loader = tqdm(train_loader, total=len(train_loader))
+    for i, batch in enumerate(train_loader):
 
         data_time.update(time.perf_counter() - start_point)
         # INFO: https://stackoverflow.com/questions/55563376/pytorch-how-does-pin-memory-work-in-dataloader
@@ -72,9 +76,12 @@ def trainer(
             )
             accuracies.update(accuracy, batch["image"].size(0))
 
-            if not model.training:
-                metric_ = metric(logits, labels)
-                metrics.extend(metric_)
+        #             met_ = calculate_metrics(logits, labels, None)
+        #             print(met_)
+
+        #             if not model.training:
+        #                 metric_ = metric(logits, labels)
+        #                 metrics.extend(metric_)
 
         if model.training:
             scaler.scale(loss).backward()
@@ -83,8 +90,8 @@ def trainer(
             optimizer.zero_grad()
             # writer.add_scalar("lr", optimizer.param_groups[0]['lr'], global_step=epoch * batch_per_epoch + i)
 
-        loader.set_description(f"{phase} Epoch {epoch+1}/{EPOCHS}")
-        loader.set_postfix(loss=losses.avg, accuracy=accuracies.avg)
+        #         loader.set_description(f"{phase} Epoch {epoch+1}/{EPOCHS}")
+        #         loader.set_postfix(loss=losses.avg, accuracy=accuracies.avg)
 
         if scheduler is not None:
             scheduler.step()
@@ -117,9 +124,11 @@ def trainer(
 
     # Remove this comment for logging on epoch basis
     if phase == "Training":
-        wandb.log({"Train Dice Loss": loss})
+        wandb.log({"Train Dice Loss": losses.avg})
+        wandb.log({"Train Dice Score": accuracies.avg})
     elif phase == "Validating":
-        wandb.log({"Valid Dice Loss": loss})
+        wandb.log({"Validation Dice Loss": losses.avg})
+        wandb.log({"Validation Dice Score": accuracies.avg})
 
     # if not model.training:
     # save_metrics(epoch, metrics, swa, logger, epoch, False, save_folder)
