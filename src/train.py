@@ -51,7 +51,7 @@ def trainer(
     start_point = time.perf_counter()
 
     metrics = []
-    #     loader = tqdm(train_loader, total=len(train_loader))
+    # train_loader = tqdm(train_loader, total=len(train_loader))
     for i, batch in enumerate(train_loader):
 
         data_time.update(time.perf_counter() - start_point)
@@ -120,7 +120,7 @@ def trainer(
         #         }
         #     )
 
-    # TODO: add wandb logger
+    # TODO: add wandb logger for individual tumor
 
     # Remove this comment for logging on epoch basis
     if phase == "Training":

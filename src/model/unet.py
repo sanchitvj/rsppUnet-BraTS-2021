@@ -43,7 +43,7 @@ class EncoderBlock(nn.Module):
         outChans,
         stride=1,
         padding=1,
-        num_groups=8,
+        num_groups=16,  # TODO: info on this.
         activation="relu",
         normalization="batch",
     ):

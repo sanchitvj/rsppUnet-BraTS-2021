@@ -172,8 +172,8 @@ def main(args, fold_num):
     args.save_folder = args.save_folder.resolve()
     save_args(args)
 
-    # TODO: add logger
-    # wandb.login(key=get_wandb_creds())
+    # NOTE: Logger
+    wandb.init(project=f"BraTS", config=args.exp_name)
 
     model_config = {
         "input_shape": (args.batch_size, 4, [args.img_size]),
@@ -186,7 +186,7 @@ def main(args, fold_num):
     # TODO: change the name of the architecture
     model = NvNet(model_config)
     print(
-        f"Number of trainable parameters: {sum(p.numel() for p in model.parameters())}"
+        f"Number of trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
     )
 
     # TODO: try more than one GPU
@@ -206,6 +206,15 @@ def main(args, fold_num):
     )
     # TODO: add warm up and experiment with parameters
     scheduler = CosineAnnealingLR(optimizer, args.epochs + round(args.epochs * 0.5))
+
+    start_epoch = 0
+    if args.resume:
+        ckpt = torch.load(args.resume)
+        start_epoch = ckpt["epoch"]
+        model.load_state_dict(ckpt["state_dict"])
+        optimizer.load_state_dict(ckpt["optimizer"])
+        scheduler.load_state_dict(ckpt["scheduler"])
+        print(f">>>> Checkpoint loaded from epoch {start_epoch+1} <<<<")
 
     train_dataset, val_dataset = get_dataset(
         args.data_path,
@@ -238,9 +247,7 @@ def main(args, fold_num):
 
     best = np.inf
 
-    wandb.init(project=f"BraTS fold {fold_num+1}", config=model_config)
-
-    for epoch in range(args.epochs):
+    for epoch in range(start_epoch, args.epochs):
 
         model.train()
         t_loss, t_acc = trainer(

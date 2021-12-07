@@ -1,8 +1,9 @@
 import os, pathlib, time, random
 import gzip
 from posixpath import dirname
-from cv2 import phaseCorrelate
+from cv2 import phase, phaseCorrelate
 from numpy.core.fromnumeric import size
+from numpy.lib.type_check import imag
 from tqdm import tqdm
 
 from skimage.transform import resize  # not using, highly inefficient
@@ -25,12 +26,14 @@ import albumentations as A
 from albumentations import Compose, HorizontalFlip, RandomResizedCrop
 from albumentations.pytorch import ToTensorV2
 
+from augmentations import random_aug, multi_augs
 
-def get_augmentations(phase, IMG_SIZE):
-    list_transforms = []
 
-    list_trfms = Compose(list_transforms)
-    return list_trfms
+# def get_augmentations(phase, IMG_SIZE):
+#     list_transforms = []
+
+#     list_trfms = Compose(list_transforms)
+#     return list_trfms
 
 
 def pad_or_crop_image(image, seg=None, target_size=(128, 128, 128)):
@@ -78,18 +81,27 @@ def get_crop_slice(target_size, dim):
         return slice(0, dim)
 
 
+def get_augmentations(image, mask):
+
+    image, mask = multi_augs(image, mask)
+    # image, mask = random_aug(image, mask, 0)
+
+    return image, mask
+
+
 class BratsDataset(Dataset):
     def __init__(
         self,
         data,
         size,
+        augs=False,
         teacher_model=False,
-        phase: str = "test",
+        phase: str = "train",
     ):
 
         self.data = data
         self.phase = phase
-        self.augmentations = get_augmentations(phase, size)
+        self.augmentations = augs
         self.size = size
         self.teacher_model = teacher_model
         if self.teacher_model:
@@ -137,36 +149,31 @@ class BratsDataset(Dataset):
 
         img = np.moveaxis(img, (0, 1, 2, 3), (0, 3, 2, 1))
 
-        if self.phase != "test":
-            mask_name = dir_name + self.seg_type
-            mask_path = os.path.join(root_path, mask_name)
-            mask = self.load_img(mask_path)
+        # if self.phase != "test":
+        mask_name = dir_name + self.seg_type
+        mask_path = os.path.join(root_path, mask_name)
+        mask = self.load_img(mask_path)
 
-            mask = self.preprocess_mask_labels(mask)
-            #       mask = mask[:, zmin:zmax, ymin:ymax, xmin:xmax]
+        mask = self.preprocess_mask_labels(mask)
+        # mask = mask[:, zmin:zmax, ymin:ymax, xmin:xmax]
 
-            # if self.is_resize:
-            #     mask = self.resize(mask, self.size)
-            # mask = np.clip(mask.astype(np.uint8), 0, 1).astype(np.float32)
-            # mask = np.clip(mask, 0, 1)
+        # mask = np.clip(mask.astype(np.uint8), 0, 1).astype(np.float32)
+        # mask = np.clip(mask, 0, 1)
 
-            # TODO: Test this
+        if self.phase == "train":
             img, mask = pad_or_crop_image(img, mask, target_size=self.size)
-            # TODO add augmentations
-            augmented = self.augmentations(
-                image=img.astype(np.float32), mask=mask.astype(np.float32)
-            )
 
-            img = augmented["image"]
-            mask = augmented["mask"]
-
-            return {
-                "image": img,
-                "mask": mask,
-            }
+            if self.augmentations:
+                img, mask = get_augmentations(
+                    img.astype(np.float32), mask.astype(np.float32), combine=True
+                )
 
         return {
+            # INFO: https://stackoverflow.com/questions/57517740/pytorch-custom-dataset-valueerror-some-of-the-strides-of-a-given-numpy-array-a
+            # "image": torch.from_numpy(img.copy()),
+            # "mask": torch.from_numpy(mask.copy()),
             "image": img,
+            "mask": mask,
         }
 
     def load_img(self, file_path):
@@ -188,10 +195,6 @@ class BratsDataset(Dataset):
 
         data_min = np.min(data)
         return (data - data_min) / (np.max(data) - data_min)
-
-    def resize(self, data: np.ndarray, size):
-        data = resize(data, size, preserve_range=True)
-        return data
 
     def preprocess_mask_labels(self, mask: np.ndarray):
 
@@ -221,7 +224,8 @@ def get_dataset(
     seed,
     size,
     fold_num,
-    teacher_model,
+    augs=False,
+    teacher_model=False,
     debug=False,
     n_splits=5,
 ):
@@ -233,23 +237,23 @@ def get_dataset(
     kfold = KFold(n_splits, shuffle=True, random_state=seed)
     splits = list(kfold.split(train_dir))
     train_idx, val_idx = splits[fold_num]
-    # print("first idx of train", train_idx[0])
-    # print("first idx of test", val_idx[0])
     train = [train_dir[i] for i in train_idx]
     val = [train_dir[i] for i in val_idx]
 
-    train_dataset = BratsDataset(train, size, teacher_model, phase="train")
-    val_dataset = BratsDataset(val, size, teacher_model, phase="val")
+    train_dataset = BratsDataset(train, size, augs, teacher_model, phase="train")
+    val_dataset = BratsDataset(val, size, augs, teacher_model, phase="val")
     return train_dataset, val_dataset
 
 
 # if __name__ == "__main__":
 
-#     train_dir = "/nfs/Workspace/brats_brain_segmentation/data/BraTS2020_data/training"  # "../data/brats21/BraTS_2021_training"
+#     train_dir = "/home/sanchit/Segmentation Research/BraTS Data/loader_test"
 #     start1 = time.time()
 #     for i in range(2):
 #         start2 = time.time()
-#         train_dataset, val_dataset = get_dataset(train_dir, 1111, (160,160,160), fold_num=i, teacher_model=True)
+#         train_dataset, val_dataset = get_dataset(
+#             train_dir, 1111, (32, 32, 32), fold_num=i, teacher_model=False
+#         )
 
 #         train_loader = DataLoader(
 #             train_dataset, batch_size=1, shuffle=True, num_workers=4
@@ -260,9 +264,7 @@ def get_dataset(
 #         loader = tqdm(train_loader, total=len(train_loader))
 #         for step, batch in enumerate(tqdm(loader)):
 #             if i % 400 == 0:
-# #                 print(step, batch["image"].shape)
+#                 #                 print(step, batch["image"].shape)
 #                 pass
 #         print(f"time taken for fold {i}: {time.time() - start2}")
 #     print("total time: ", (time.time() - start1))
-# print(len(train_loader), len(val_loader))
-# print(train_data["image"][0].shape, val_data["image"][0].shape)

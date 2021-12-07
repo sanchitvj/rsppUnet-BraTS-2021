@@ -1,0 +1,32 @@
+# INITIAL SETTINGS
+
+device: 'cuda:0'
+seed: 12536
+
+dataset:
+  data_path: "/nfs/Workspace/brats_brain_segmentation/data/BraTS2020_data/training"
+  teacher_model: False # True
+  num_workers: 4 # batch_size * ngpu
+  batch_size: 1
+  img_size: (160, 160, 160)
+  augs: True
+
+model:
+  normalization: "group_normalization" # batch_normalization
+  activation: "relu" # elu, leakyrelu
+
+optimizer:
+  optim: "adam" # Ranger, AdamW
+  lr: 25e-5
+  wd: 1e-7
+
+criterion: "SoftDiceLossSquared" # DC_and_Focal_loss, EDiceLoss, FocalLoss
+
+scheduler: "CosineAnnealingLR" # CosineAnnealingWarmRestarts
+
+train:
+  resume: None
+  epochs: 40
+
+logger:
+  project_name: "BraTS_test" # BraTS_resume, BraTS_folds
