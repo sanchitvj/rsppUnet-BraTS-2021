@@ -1,6 +1,7 @@
 import os, pathlib, time, random
 import gzip
 from posixpath import dirname
+from albumentations import augmentations
 from cv2 import phase, phaseCorrelate
 from numpy.core.fromnumeric import size
 from numpy.lib.type_check import imag
@@ -15,8 +16,6 @@ import pydicom as pdm
 import nilearn as nl
 import nilearn.plotting as nlplt
 
-# import h5py
-
 import numpy as np
 import pandas as pd
 import torch
@@ -26,14 +25,7 @@ import albumentations as A
 from albumentations import Compose, HorizontalFlip, RandomResizedCrop
 from albumentations.pytorch import ToTensorV2
 
-from augmentations import random_aug, multi_augs
-
-
-# def get_augmentations(phase, IMG_SIZE):
-#     list_transforms = []
-
-#     list_trfms = Compose(list_transforms)
-#     return list_trfms
+from augmentations import DataAugmentation
 
 
 def pad_or_crop_image(image, seg=None, target_size=(128, 128, 128)):
@@ -81,29 +73,19 @@ def get_crop_slice(target_size, dim):
         return slice(0, dim)
 
 
-def get_augmentations(image, mask):
-
-    image, mask = multi_augs(image, mask)
-    # image, mask = random_aug(image, mask, 0)
-
-    return image, mask
-
-
 class BratsDataset(Dataset):
     def __init__(
         self,
+        args,
         data,
-        size,
-        augs=False,
-        teacher_model=False,
         phase: str = "train",
     ):
 
         self.data = data
         self.phase = phase
-        self.augmentations = augs
-        self.size = size
-        self.teacher_model = teacher_model
+        self.augmentations = args.augs
+        self.size = args.dataset.img_size
+        self.teacher_model = args.dataset.teacher_model
         if self.teacher_model:
             self.data_types = ["_flair.nii", "_t1.nii", "_t1ce.nii", "_t2.nii"]
             self.seg_type = "_seg.nii"
@@ -134,7 +116,6 @@ class BratsDataset(Dataset):
             images.append(img)
 
         img = np.stack(images)
-
         # FIXME: preprocessing removed; collate not working.
         # Remove maximum extent of the zero-background to make future crop more useful
         #        z_indexes, y_indexes, x_indexes = np.nonzero(np.sum(img, axis=0) != 0)
@@ -149,7 +130,6 @@ class BratsDataset(Dataset):
 
         img = np.moveaxis(img, (0, 1, 2, 3), (0, 3, 2, 1))
 
-        # if self.phase != "test":
         mask_name = dir_name + self.seg_type
         mask_path = os.path.join(root_path, mask_name)
         mask = self.load_img(mask_path)
@@ -157,16 +137,17 @@ class BratsDataset(Dataset):
         mask = self.preprocess_mask_labels(mask)
         # mask = mask[:, zmin:zmax, ymin:ymax, xmin:xmax]
 
-        # mask = np.clip(mask.astype(np.uint8), 0, 1).astype(np.float32)
-        # mask = np.clip(mask, 0, 1)
-
+        # FIXME: not using pad_crop for validation gives error(spp_net3D)
+        img, mask = pad_or_crop_image(img, mask, target_size=self.size)
         if self.phase == "train":
-            img, mask = pad_or_crop_image(img, mask, target_size=self.size)
 
-            if self.augmentations:
-                img, mask = get_augmentations(
-                    img.astype(np.float32), mask.astype(np.float32), combine=True
-                )
+            if self.augmentations.apply:
+                augment = DataAugmentation(self.augmentations)
+                img, mask = augment(img.astype(np.float32), mask.astype(np.float32))
+                # mask = augment(mask.astype(np.float32))
+        #                 img, mask = pad_or_crop_image(img, mask, target_size=self.size)
+        else:
+            img, mask = img.astype(np.float32), mask.astype(np.float32)
 
         return {
             # INFO: https://stackoverflow.com/questions/57517740/pytorch-custom-dataset-valueerror-some-of-the-strides-of-a-given-numpy-array-a
@@ -220,51 +201,77 @@ class BratsDataset(Dataset):
 
 
 def get_dataset(
-    data_path,
-    seed,
-    size,
+    args,
     fold_num,
-    augs=False,
-    teacher_model=False,
-    debug=False,
     n_splits=5,
 ):
     train_dir = []
-    for filename in os.listdir(data_path):
-        f = os.path.join(data_path, filename)
+    for filename in os.listdir(args.dataset.data_path):
+        f = os.path.join(args.dataset.data_path, filename)
         train_dir.append(f)
 
-    kfold = KFold(n_splits, shuffle=True, random_state=seed)
+    kfold = KFold(n_splits, shuffle=True, random_state=args.seed)
     splits = list(kfold.split(train_dir))
     train_idx, val_idx = splits[fold_num]
     train = [train_dir[i] for i in train_idx]
     val = [train_dir[i] for i in val_idx]
 
-    train_dataset = BratsDataset(train, size, augs, teacher_model, phase="train")
-    val_dataset = BratsDataset(val, size, augs, teacher_model, phase="val")
+    train_dataset = BratsDataset(args, train, phase="train")
+    val_dataset = BratsDataset(args, val, phase="val")
     return train_dataset, val_dataset
 
 
-# if __name__ == "__main__":
+class dataset:
 
-#     train_dir = "/home/sanchit/Segmentation Research/BraTS Data/loader_test"
-#     start1 = time.time()
-#     for i in range(2):
-#         start2 = time.time()
-#         train_dataset, val_dataset = get_dataset(
-#             train_dir, 1111, (32, 32, 32), fold_num=i, teacher_model=False
-#         )
+    data_path = "/home/sanchit/Segmentation Research/BraTS Data/loader_test"
+    teacher_model = False  # True
+    num_workers = 4  # batch_size * ngpu
+    batch_size = 1
+    img_size = (16, 16, 16)
 
-#         train_loader = DataLoader(
-#             train_dataset, batch_size=1, shuffle=True, num_workers=4
-#         )
-#         val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=4)
-#         # train_data = next(iter(train_loader))
-#         # val_data = next(iter(val_loader))
-#         loader = tqdm(train_loader, total=len(train_loader))
-#         for step, batch in enumerate(tqdm(loader)):
-#             if i % 400 == 0:
-#                 #                 print(step, batch["image"].shape)
-#                 pass
-#         print(f"time taken for fold {i}: {time.time() - start2}")
-#     print("total time: ", (time.time() - start1))
+
+class augs:
+
+    apply = True
+    aug_name = "elastic_transform"  # flip, rotate, shift, brightness, elastic_transform
+    aug_type = "multiple"  # robust
+    aug_prob = 0.75
+    min_angle = -30
+    max_angle = 30
+    max_percentage = 0.4
+
+
+class args:
+    # data_path = "/home/sanchit/Segmentation Research/BraTS Data/loader_test"
+
+    # data_path = data_path
+    seed = 1235
+    # img_size = (32, 32, 32)
+    # augs = dict(apply=True)
+    # teacher_model = False
+    # min_angle = -30
+    # max_angle = 30
+    # max_percentage = 0.4
+    dataset = dataset
+    augs = augs
+
+
+if __name__ == "__main__":
+
+    start1 = time.time()
+    for i in range(1):
+        start2 = time.time()
+        train_dataset, val_dataset = get_dataset(args, fold_num=i)
+
+        train_loader = DataLoader(
+            train_dataset, batch_size=1, shuffle=True, num_workers=4
+        )
+        val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=4)
+
+        loader = tqdm(train_loader, total=len(train_loader))
+        for step, batch in enumerate(tqdm(loader)):
+            if i % 4 == 0:
+                print(step, batch["image"].shape)
+                pass
+        print(f"time taken for fold {i}: {time.time() - start2}")
+    print("total time: ", (time.time() - start1))

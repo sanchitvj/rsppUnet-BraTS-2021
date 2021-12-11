@@ -1,15 +1,24 @@
 # INITIAL SETTINGS
 
-device: 'cuda:0'
+device: 'cuda:1'
 seed: 12536
+debug: False
 
 dataset:
-  data_path: "/nfs/Workspace/brats_brain_segmentation/data/BraTS2020_data/training"
+  data_path: "/nfs/Workspace/brats_brain_segmentation/data/BraTS2021_data/training"
   teacher_model: False # True
-  num_workers: 4 # batch_size * ngpu
+  num_workers: 16 # batch_size * ngpu
   batch_size: 1
-  img_size: (160, 160, 160)
-  augs: True
+  img_size: [160, 160, 160]
+    
+augs:
+  apply: True
+  aug_name:  # flip, rotate, shift, brightness, elastic_transform
+  aug_type: "multiple" # robust
+  aug_prob: 0.75
+  min_angle: -30
+  max_angle: 30
+  max_percentage: 0.4
 
 model:
   normalization: "group_normalization" # batch_normalization
@@ -25,8 +34,10 @@ criterion: "SoftDiceLossSquared" # DC_and_Focal_loss, EDiceLoss, FocalLoss
 scheduler: "CosineAnnealingLR" # CosineAnnealingWarmRestarts
 
 train:
-  resume: None
-  epochs: 40
+  resume: 
+  epochs: 10
 
 logger:
-  project_name: "BraTS_test" # BraTS_resume, BraTS_folds
+  project_name: "BraTS_dec9" # BraTS_resume, BraTS_folds
+
+com: "multiple augs" # Comment

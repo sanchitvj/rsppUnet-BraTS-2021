@@ -37,9 +37,10 @@ def trainer(
     phase,
     metric,
     device,
+    debug,
 ):
     print(" ")
-    print(f"TRAINING EPOCH {epoch}")
+    print(f"*****  {phase} epoch {epoch+1} *****")
     batch_time = AverageMeter("Time", ":6.3f")
     data_time = AverageMeter("Data", ":6.3f")
     losses = AverageMeter("Loss", ":.4e")
@@ -51,13 +52,14 @@ def trainer(
     start_point = time.perf_counter()
 
     metrics = []
-    # train_loader = tqdm(train_loader, total=len(train_loader))
+    if debug:
+        train_loader = tqdm(train_loader, total=len(train_loader))
     for i, batch in enumerate(train_loader):
 
         data_time.update(time.perf_counter() - start_point)
         # INFO: https://stackoverflow.com/questions/55563376/pytorch-how-does-pin-memory-work-in-dataloader
-        images = batch["image"].to(device)  # , non_blocking=True)
-        labels = batch["mask"].to(device)
+        images = batch["image"].to(device, non_blocking=True, dtype=torch.float)
+        labels = batch["mask"].to(device, dtype=torch.float)
 
         # TODO: check floating point precision
         # NOTE: avg mixed precision will not affect validation
@@ -90,8 +92,9 @@ def trainer(
             optimizer.zero_grad()
             # writer.add_scalar("lr", optimizer.param_groups[0]['lr'], global_step=epoch * batch_per_epoch + i)
 
-        #         loader.set_description(f"{phase} Epoch {epoch+1}/{EPOCHS}")
-        #         loader.set_postfix(loss=losses.avg, accuracy=accuracies.avg)
+        if debug:
+            train_loader.set_description(f"{phase} Epoch {epoch+1}/{EPOCHS}")
+            train_loader.set_postfix(loss=losses.avg, accuracy=accuracies.avg)
 
         if scheduler is not None:
             scheduler.step()
@@ -120,7 +123,7 @@ def trainer(
         #         }
         #     )
 
-    # TODO: add wandb logger for individual tumor
+    # TODO: add wandb logger
 
     # Remove this comment for logging on epoch basis
     if phase == "Training":
