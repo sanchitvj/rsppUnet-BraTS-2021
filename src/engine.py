@@ -45,9 +45,12 @@ def main(args, fold_num):
     )
     wandb.init(project=args.logger.project_name, config=args)
 
-    save_folder = f"/nfs/Workspace/brats_brain_segmentation/src/experiments/{exp_name}"
-    os.makedirs(save_folder, exist_ok=True)
-    # print(save_folder)
+    if args.save:
+        save_folder = (
+            f"/nfs/Workspace/brats_brain_segmentation/src/experiments/{exp_name}"
+        )
+        os.makedirs(save_folder, exist_ok=True)
+        # print(save_folder)
 
     model_config = {
         "input_shape": (args.dataset.batch_size, 4, [args.dataset.img_size]),
@@ -157,18 +160,19 @@ def main(args, fold_num):
             print(f"Validation loss at the end of epoch {epoch+1} is: {v_loss}")
             print(f"Validation accuracy at the end of epoch {epoch+1} is: {v_acc}")
 
-        if v_loss < best:
-            best = v_loss
-            torch.save(
-                dict(
-                    epoch=epoch + 1,
-                    model=model,
-                    state_dict=model.state_dict(),
-                    optimizer=optimizer.state_dict(),
-                    scheduler=scheduler.state_dict(),
-                ),
-                f"{save_folder}/model_{v_acc:.3f}_{v_loss:.3f}.pth",
-            )
+        if args.save:
+            if v_loss < best:
+                best = v_loss
+                torch.save(
+                    dict(
+                        epoch=epoch + 1,
+                        model=model,
+                        state_dict=model.state_dict(),
+                        optimizer=optimizer.state_dict(),
+                        scheduler=scheduler.state_dict(),
+                    ),
+                    f"{save_folder}/model_{v_acc:.3f}_{v_loss:.3f}.pth",
+                )
 
         if epoch / args.train.epochs > 0.5:
             scheduler.step()

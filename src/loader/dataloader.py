@@ -221,57 +221,57 @@ def get_dataset(
     return train_dataset, val_dataset
 
 
-class dataset:
+# class dataset:
 
-    data_path = "/home/sanchit/Segmentation Research/BraTS Data/loader_test"
-    teacher_model = False  # True
-    num_workers = 4  # batch_size * ngpu
-    batch_size = 1
-    img_size = (16, 16, 16)
-
-
-class augs:
-
-    apply = True
-    aug_name = "elastic_transform"  # flip, rotate, shift, brightness, elastic_transform
-    aug_type = "multiple"  # robust
-    aug_prob = 0.75
-    min_angle = -30
-    max_angle = 30
-    max_percentage = 0.4
+#     data_path = "/home/sanchit/Segmentation Research/BraTS Data/loader_test"
+#     teacher_model = False  # True
+#     num_workers = 4  # batch_size * ngpu
+#     batch_size = 1
+#     img_size = (16, 16, 16)
 
 
-class args:
-    # data_path = "/home/sanchit/Segmentation Research/BraTS Data/loader_test"
+# class augs:
 
-    # data_path = data_path
-    seed = 1235
-    # img_size = (32, 32, 32)
-    # augs = dict(apply=True)
-    # teacher_model = False
-    # min_angle = -30
-    # max_angle = 30
-    # max_percentage = 0.4
-    dataset = dataset
-    augs = augs
+#     apply = True
+#     aug_name = None  # flip, rotate, shift, brightness, elastic_transform
+#     aug_type = "multiple"  # robust
+#     aug_prob = 0.75
+#     min_angle = -30
+#     max_angle = 30
+#     max_percentage = 0.4
 
 
-if __name__ == "__main__":
+# class args:
+#     # data_path = "/home/sanchit/Segmentation Research/BraTS Data/loader_test"
 
-    start1 = time.time()
-    for i in range(1):
-        start2 = time.time()
-        train_dataset, val_dataset = get_dataset(args, fold_num=i)
+#     # data_path = data_path
+#     seed = 1235
+#     # img_size = (32, 32, 32)
+#     # augs = dict(apply=True)
+#     # teacher_model = False
+#     # min_angle = -30
+#     # max_angle = 30
+#     # max_percentage = 0.4
+#     dataset = dataset
+#     augs = augs
 
-        train_loader = DataLoader(
-            train_dataset, batch_size=1, shuffle=True, num_workers=4
-        )
-        val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=4)
 
-        loader = tqdm(train_loader, total=len(train_loader))
-        for step, batch in enumerate(tqdm(loader)):
-            if i % 4 == 0:
-                print(step, batch["image"].shape)
-                pass
-        print(f"time taken for fold {i}: {time.time() - start2}")
-    print("total time: ", (time.time() - start1))
+# if __name__ == "__main__":
+
+#     start1 = time.time()
+#     for i in range(1):
+#         start2 = time.time()
+#         train_dataset, val_dataset = get_dataset(args, fold_num=i)
+
+#         train_loader = DataLoader(
+#             train_dataset, batch_size=1, shuffle=True, num_workers=4
+#         )
+#         val_loader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=4)
+
+#         loader = tqdm(train_loader, total=len(train_loader))
+#         for step, batch in enumerate(tqdm(loader)):
+#             if i % 4 == 0:
+#                 print(step, batch["image"].shape)
+#                 pass
+#         print(f"time taken for fold {i}: {time.time() - start2}")
+#     print("total time: ", (time.time() - start1))

@@ -3,19 +3,20 @@
 device: 'cuda:1'
 seed: 12536
 debug: False
+save: False
 
 dataset:
   data_path: "/nfs/Workspace/brats_brain_segmentation/data/BraTS2021_data/training"
   teacher_model: False # True
-  num_workers: 16 # batch_size * ngpu
+  num_workers: 8 # batch_size * ngpu
   batch_size: 1
   img_size: [160, 160, 160]
     
 augs:
   apply: True
   aug_name:  # flip, rotate, shift, brightness, elastic_transform
-  aug_type: "multiple" # robust
-  aug_prob: 0.75
+  aug_type: "robust" # robust
+  aug_prob: 0.95
   min_angle: -30
   max_angle: 30
   max_percentage: 0.4
@@ -35,9 +36,9 @@ scheduler: "CosineAnnealingLR" # CosineAnnealingWarmRestarts
 
 train:
   resume: 
-  epochs: 10
+  epochs: 15
 
 logger:
-  project_name: "BraTS_dec9" # BraTS_resume, BraTS_folds
+  project_name: "BraTS_test" # BraTS_resume, BraTS_folds
 
-com: "multiple augs" # Comment
+com: "robust augs" # Comment

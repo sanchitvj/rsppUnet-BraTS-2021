@@ -1,5 +1,5 @@
 import numpy as np
-import scipy
+import scipy, time, elasticdeform
 import scipy.ndimage as ndimage
 from scipy.ndimage.interpolation import affine_transform
 from scipy.interpolate import RegularGridInterpolator
@@ -9,6 +9,25 @@ import torch.nn as nn
 
 # NOTE: random_shift, elastic_transfrom and random_rotate are taken from
 # https://github.com/The-AI-Summer/learn-deep-learning/tree/main/Medical
+
+
+def exp_dim_mask(image, mask):
+
+    mask_new = mask.copy()
+    start_time = time.time()
+    mask_new = np.pad(
+        mask_new,
+        ((0, 1), (0, 0), (0, 0), (0, 0)),
+        mode="constant",
+        constant_values=5,
+    )
+    #     print("time taken to pad: ",(time.time()-start_time))
+    start_time2 = time.time()
+    image, mask = elastic_transform(image, mask_new)
+    #     print("time taken for elastic transform: ", (time.time()-start_time2))
+    mask_new = np.delete(mask, 3, 0)
+
+    return image, mask_new
 
 
 def flip(img, mask):
@@ -53,128 +72,14 @@ def shift(img, mask, max_percentage=0.4):
 
 
 def elastic_transform(image, mask, alpha=6, sigma=40, bg_val=0.1):
-    """
-    Elastic deformation of images as described in
-    Simard, Steinkraus and Platt, "Best Practices for
-    Convolutional Neural Networks applied to Visual
-    Document Analysis", in
-    Proc. of the International Conference on Document Analysis and
-    Recognition, 2003.
 
-    Modified from:
-    https://gist.github.com/chsasank/4d8f68caf01f041a6453e67fb30f8f5a
-    https://github.com/fcalvet/image_tools/blob/master/image_augmentation.py#L62
-
-    Modified to take 3D inputs
-    Deforms both the image and corresponding label file
-    image linear/trilinear interpolated
-    Label volumes nearest neighbour interpolated
-    """
-    assert image.ndim == 4  # we have 4 not 3
-    im_shape = image.shape
-    mk_shape = mask.shape
-    # imgnew = np.squeeze(image, axis=0)
-    # masknew = np.squeeze(mask, axis=0)
-
-    dtype = image.dtype
-
-    # Define coordinate system
-    im_coords = (
-        np.arange(im_shape[0]),
-        np.arange(im_shape[1]),
-        np.arange(im_shape[2]),
-        np.arange(im_shape[3]),
+    image, mask_new = elasticdeform.deform_random_grid(
+        [image, mask],
+        sigma=2,
+        axis=[(1, 2, 3), (1, 2, 3)],
+        order=[1, 0],
+        mode="constant",
     )
-    mk_coords = (
-        np.arange(mk_shape[0]),
-        np.arange(mk_shape[1]),
-        np.arange(mk_shape[2]),
-        np.arange(mk_shape[3]),
-    )
-
-    # Get random elastic deformations
-    # FIXME: im_shape may be an issue with masks.
-    dx = (
-        gaussian_filter(
-            (np.random.rand(*im_shape) * 2 - 1), sigma, mode="constant", cval=0.0
-        )
-        * alpha
-    )
-    dy = (
-        gaussian_filter(
-            (np.random.rand(*im_shape) * 2 - 1), sigma, mode="constant", cval=0.0
-        )
-        * alpha
-    )
-    dz = (
-        gaussian_filter(
-            (np.random.rand(*im_shape) * 2 - 1), sigma, mode="constant", cval=0.0
-        )
-        * alpha
-    )
-
-    mdx = (
-        gaussian_filter(
-            (np.random.rand(*mk_shape) * 2 - 1), sigma, mode="constant", cval=0.0
-        )
-        * alpha
-    )
-    mdy = (
-        gaussian_filter(
-            (np.random.rand(*mk_shape) * 2 - 1), sigma, mode="constant", cval=0.0
-        )
-        * alpha
-    )
-    mdz = (
-        gaussian_filter(
-            (np.random.rand(*mk_shape) * 2 - 1), sigma, mode="constant", cval=0.0
-        )
-        * alpha
-    )
-    # Define sample points
-    ic, ix, iy, iz = np.mgrid[
-        0 : im_shape[0], 0 : im_shape[1], 0 : im_shape[2], 0 : im_shape[3]
-    ]
-    mc, mx, my, mz = np.mgrid[
-        0 : mk_shape[0], 0 : mk_shape[1], 0 : mk_shape[2], 0 : mk_shape[3]
-    ]
-    im_indices = (
-        np.reshape(ic, (-1, 1)),
-        np.reshape(ix + dx, (-1, 1)),
-        np.reshape(iy + dy, (-1, 1)),
-        np.reshape(iz + dz, (-1, 1)),
-    )
-    mk_indices = (
-        np.reshape(mc, (-1, 1)),
-        np.reshape(mx + mdx, (-1, 1)),
-        np.reshape(my + mdy, (-1, 1)),
-        np.reshape(mz + mdz, (-1, 1)),
-    )
-
-    # Initialize interpolators
-    im_intrps = RegularGridInterpolator(
-        im_coords, image, method="linear", bounds_error=False, fill_value=bg_val
-    )
-    mk_intrps = RegularGridInterpolator(
-        mk_coords, mask, method="linear", bounds_error=False, fill_value=bg_val
-    )
-
-    # Interpolate 3D image image
-    image = np.empty(shape=image.shape, dtype=dtype)
-    image = im_intrps(im_indices).reshape(im_shape)
-
-    # Interpolate labels
-    # FIXME: ValueError: There are 4 points and 3 values in dimension 0...
-    # ...not using image and labels together
-    # if labels is not None:
-    mask_new = np.empty(shape=mask.shape, dtype=dtype)
-    mask_new = mk_intrps(mk_indices).reshape(mk_shape)
-
-    # mk_intrp = RegularGridInterpolator(
-    #     mk_coords, mask_new, method="nearest", bounds_error=False, fill_value=0
-    # )
-
-    # mask = mk_intrp(mk_indices).reshape(mk_shape).astype(mask.dtype)
 
     return image, mask_new
 
@@ -246,7 +151,7 @@ def test_aug(img, mask, aug_name, args):
         imgnew, masknew = shift(img, masknew, args.max_percentage)
 
     if aug_name == "elastic_transform":
-        imgnew, masknew = elastic_transform(imgnew, masknew)  # NOTE: no args for now
+        imgnew, masknew = exp_dim_mask(imgnew, masknew)  # NOTE: no args for now
 
     return imgnew, masknew
 
@@ -282,7 +187,7 @@ def robust_augs(img, mask, args):
     """
     imgnew, masknew = img, mask
 
-    if np.random.random_sample() < 0.7:
+    if np.random.random_sample() < 0.5:
         imgnew, masknew = flip(imgnew, masknew)
     if np.random.random_sample() < 0.3:
         imgnew, masknew = brightness(imgnew, masknew)
@@ -290,7 +195,8 @@ def robust_augs(img, mask, args):
         imgnew, masknew = rotate(imgnew, masknew, args.min_angle, args.max_angle)
     #     if np.random.random_sample() < 0.3:
     #         imgnew, masknew = shift(imgnew, masknew, args.max_percentage)
-    #     imgnew, masknew = elastic_transform(imgnew, masknew)
+    if np.random.random_sample() < 0.3:
+        imgnew, masknew = exp_dim_mask(imgnew, masknew)
 
     return imgnew, masknew
 

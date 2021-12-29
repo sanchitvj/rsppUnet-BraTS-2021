@@ -174,15 +174,20 @@ class FocalLoss(nn.Module):
         if self.apply_nonlin is not None:
             logit = self.apply_nonlin(logit)
         num_class = logit.shape[1]
+        #         print(num_class)
 
         if logit.dim() > 2:
             # N,C,d1,d2 -> N,C,m (m=d1*d2*...)
             logit = logit.view(logit.size(0), logit.size(1), -1)
             logit = logit.permute(0, 2, 1).contiguous()
             logit = logit.view(-1, logit.size(-1))
-        target = torch.squeeze(target, 1)
-        target = target.view(-1, 1)
-        # print(logit.shape, target.shape)
+        #         target = torch.squeeze(target, 1)
+        #         target = target.view(target.size(0), -1)
+        # torch.Size([4096000, 3]) torch.Size([1, 3, 160, 160, 160]) above was giving
+        target = target.view(target.size(0), target.size(1), -1)
+        target = target.permute(0, 2, 1).contiguous()
+        target = target.view(-1, target.size(-1))
+        #         print(logit.shape, target.shape)
         #
         alpha = self.alpha
 
@@ -221,6 +226,8 @@ class FocalLoss(nn.Module):
 
         alpha = alpha[idx]
         alpha = torch.squeeze(alpha)
+        # FIXME: RuntimeError: The size of tensor a (3) must match the size of tensor b (4096000) at non-singleton dimension 1
+        print(alpha.shape, gamma.shape)
         loss = -1 * alpha * torch.pow((1 - pt), gamma) * logpt
 
         if self.size_average:
@@ -231,14 +238,14 @@ class FocalLoss(nn.Module):
 
 
 class DC_and_Focal_loss(nn.Module):
-    def __init__(self, soft_dice_kwargs, focal_kwargs):
+    def __init__(self):  # , soft_dice_kwargs, focal_kwargs):
         super(DC_and_Focal_loss, self).__init__()
 
         softmax_helper = lambda x: F.softmax(x, 1)
 
         # TODO: check the difference between SDL and SDL squared.
-        self.dc = SoftDiceLossSquared(**soft_dice_kwargs)
-        self.focal = FocalLoss(**focal_kwargs)
+        self.dc = SoftDiceLossSquared()  # **soft_dice_kwargs)
+        self.focal = FocalLoss()  # **focal_kwargs)
 
     def forward(self, net_output, target):
         dc_loss = self.dc(net_output, target)
