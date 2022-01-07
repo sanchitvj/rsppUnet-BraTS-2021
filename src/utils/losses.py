@@ -15,67 +15,6 @@ def sum_tensor(inp, axes, keepdim=False):
     return inp
 
 
-# TODO: add metrics mode in Soft Dl.
-# Taken from NNUnet
-class SoftDiceLossSquared(nn.Module):
-    def __init__(self, apply_nonlin=None, batch_dice=False, do_bg=True, smooth=1.0):
-        """
-        squares the terms in the denominator as proposed by Milletari et al.
-        """
-        super(SoftDiceLossSquared, self).__init__()
-
-        self.do_bg = do_bg
-        self.batch_dice = batch_dice
-        self.apply_nonlin = apply_nonlin
-        self.smooth = smooth
-
-    def forward(self, inputs, targets, loss_mask=None):
-        shp_x = inputs.shape
-        shp_y = targets.shape
-
-        if self.batch_dice:
-            axes = [0] + list(range(2, len(shp_x)))
-        else:
-            axes = list(range(2, len(shp_x)))
-
-        if self.apply_nonlin is not None:
-            inputs = self.apply_nonlin(inputs)
-
-        with torch.no_grad():
-            if len(shp_x) != len(shp_y):
-                targets = targets.view((shp_y[0], 1, *shp_y[1:]))
-
-            if all([i == j for i, j in zip(inputs.shape, targets.shape)]):
-                # if this is the case then gt is probably already a one hot encoding
-                y_onehot = targets
-            else:
-                targets = targets.long()
-                y_onehot = torch.zeros(shp_x)
-                if inputs.device.type == "cuda":
-                    y_onehot = y_onehot.cuda(inputs.device.index)
-                y_onehot.scatter_(1, targets, 1).float()
-
-        intersect = inputs * y_onehot
-        # values in the denominator get smoothed
-        denominator = inputs ** 2 + y_onehot ** 2
-
-        # aggregation was previously done in get_tp_fp_fn, but needs to be done here now (needs to be done after
-        # squaring)
-        intersect = sum_tensor(intersect, axes, False) + self.smooth
-        denominator = sum_tensor(denominator, axes, False) + self.smooth
-
-        dc = 2 * intersect / denominator
-
-        if not self.do_bg:
-            if self.batch_dice:
-                dc = dc[1:]
-            else:
-                dc = dc[:, 1:]
-        dc = dc.mean()
-        # dc -> 1-dc
-        return 1 - dc
-
-
 class EDiceLoss(nn.Module):
     """Dice loss tailored to Brats need."""
 
@@ -131,6 +70,67 @@ class EDiceLoss(nn.Module):
                 dice.append(self.binary_dice(inputs[j, i], target[j, i], i, True))
             dices.append(dice)
         return dices
+
+
+# TODO: add metrics mode in Soft Dl.
+# Taken from NNUnet
+class SoftDiceLossSquared(nn.Module):
+    def __init__(self, apply_nonlin=None, batch_dice=False, do_bg=True, smooth=1.0):
+        """
+        squares the terms in the denominator as proposed by Milletari et al.
+        """
+        super(SoftDiceLossSquared, self).__init__()
+
+        self.do_bg = do_bg
+        self.batch_dice = batch_dice
+        self.apply_nonlin = apply_nonlin  # TODO: try this
+        self.smooth = smooth
+
+    def forward(self, inputs, targets, loss_mask=None):
+        shp_x = inputs.shape
+        shp_y = targets.shape
+
+        if self.batch_dice:
+            axes = [0] + list(range(2, len(shp_x)))
+        else:
+            axes = list(range(2, len(shp_x)))
+
+        if self.apply_nonlin is not None:
+            inputs = self.apply_nonlin(inputs)
+
+        with torch.no_grad():
+            if len(shp_x) != len(shp_y):
+                targets = targets.view((shp_y[0], 1, *shp_y[1:]))
+
+            if all([i == j for i, j in zip(inputs.shape, targets.shape)]):
+                # if this is the case then gt is probably already a one hot encoding
+                y_onehot = targets
+            else:
+                targets = targets.long()
+                y_onehot = torch.zeros(shp_x)
+                if inputs.device.type == "cuda":
+                    y_onehot = y_onehot.cuda(inputs.device.index)
+                y_onehot.scatter_(1, targets, 1).float()
+
+        intersect = inputs * y_onehot
+        # values in the denominator get smoothed
+        denominator = inputs ** 2 + y_onehot ** 2
+
+        # aggregation was previously done in get_tp_fp_fn, but needs to be done here now (needs to be done after
+        # squaring)
+        intersect = sum_tensor(intersect, axes, False) + self.smooth
+        denominator = sum_tensor(denominator, axes, False) + self.smooth
+
+        dc = 2 * intersect / denominator
+
+        if not self.do_bg:
+            if self.batch_dice:
+                dc = dc[1:]
+            else:
+                dc = dc[:, 1:]
+        dc = dc.mean()
+        # dc -> 1-dc
+        return 1 - dc
 
 
 class FocalLoss(nn.Module):
@@ -225,15 +225,25 @@ class FocalLoss(nn.Module):
         gamma = self.gamma
 
         alpha = alpha[idx]
+        # print("alpha shape: ", alpha.shape) # torch.Size([4096000, 3, 1])
         alpha = torch.squeeze(alpha)
-        # FIXME: RuntimeError: The size of tensor a (3) must match the size of tensor b (4096000) at non-singleton dimension 1
-        print(alpha.shape, gamma.shape)
-        loss = -1 * alpha * torch.pow((1 - pt), gamma) * logpt
+        # RuntimeError: The size of tensor a (3) must match the size of tensor b (4096000) at non-singleton dimension 1
+        # NOTE: below 2 lines to avoid error above
+        pt = pt.view((pt.shape[0], 1, *pt.shape[1:]))
+        logpt = logpt.view((logpt.shape[0], 1, *logpt.shape[1:]))
+        # print("alpha shape: ", alpha.shape) # torch.Size([4096000, 3])
+        # print(gamma) # 2
+        # print("pt shape: ", (1-pt).shape) # torch.Size([4096000])
+        # print("logpt shape: ", logpt.shape) # torch.Size([4096000])
 
+        loss = -1 * alpha * torch.pow((1 - pt), gamma)  # * logpt
+        # print(loss)
         if self.size_average:
-            loss = loss.mean()
+            loss = (1 - loss).mean()
+            # print(loss)
         else:
             loss = loss.sum()
+        # (1 - loss) not working; donno why
         return loss
 
 
@@ -251,8 +261,8 @@ class DC_and_Focal_loss(nn.Module):
         dc_loss = self.dc(net_output, target)
         focal_loss = self.focal(net_output, target)
 
-        result = dc_loss + focal_loss
-        return result
+        result = 0.7 * dc_loss + 0.3 * focal_loss
+        return 1 + result
 
 
 # if __name__ == "__main__":

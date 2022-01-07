@@ -1,5 +1,5 @@
-import hydra, yaml, os
-from omegaconf import OmegaConf, DictConfig, open_dict
+import hydra
+from omegaconf import DictConfig
 from engine import main
 
 # args = OmegaConf.load('/nfs/Workspace/brats_brain_segmentation/src/config/config.yaml')
@@ -19,7 +19,7 @@ from engine import main
 
 @hydra.main(config_path="config", config_name="config")
 def func(cfg: DictConfig):
-    main(cfg, 0)
+    main(cfg, cfg.fold)
 
 
 if __name__ == "__main__":

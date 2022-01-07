@@ -15,9 +15,14 @@ from torch.cuda.amp import autocast, GradScaler
 
 from model.unet import NvNet
 from loader.dataloader import get_dataset
-from loss import SoftDiceLossSquared
-
-from utils import AverageMeter, save_metrics, calculate_metrics, dice_coefficient
+from utils.losses import SoftDiceLossSquared
+from utils.metrics import (
+    AverageMeter,
+    save_metrics,
+    calculate_metrics,
+    dice_coefficient_1,
+    dice_per_region,
+)
 
 # Setting up logging stuff
 import wandb
@@ -46,6 +51,11 @@ def trainer(
     losses = AverageMeter("Loss", ":.4e")
     # FIXME: accuracy meter
     accuracies = AverageMeter("Accuracy", ":2f")
+    dice_wts, dice_tcs, dice_ets = (
+        AverageMeter("WT score", ":2f"),
+        AverageMeter("TC score", ":2f"),
+        AverageMeter("ET score", ":2f"),
+    )
     scaler = GradScaler()
 
     # TODO: get more info on perf_counter()
@@ -73,10 +83,16 @@ def trainer(
             else:
                 print("NaN in model loss!!")
 
-            accuracy = dice_coefficient(
+            accuracy = dice_coefficient_1(
                 logits.cpu(), labels.cpu(), threshold=0.5, eps=1e-8
             )
-            accuracies.update(accuracy, batch["image"].size(0))
+            dice_et, dice_tc, dice_wt = dice_per_region(
+                images, logits.cpu(), labels.cpu()
+            )
+            dice_ets.update(dice_et.detach().numpy(), batch["image"].size(0))
+            dice_tcs.update(dice_tc.detach().numpy(), batch["image"].size(0))
+            dice_wts.update(dice_wt.detach().numpy(), batch["image"].size(0))
+            accuracies.update(accuracy.detach().numpy(), batch["image"].size(0))
 
         #             met_ = calculate_metrics(logits, labels, None)
         #             print(met_)
@@ -94,7 +110,13 @@ def trainer(
 
         if debug:
             train_loader.set_description(f"{phase} Epoch {epoch+1}/{EPOCHS}")
-            train_loader.set_postfix(loss=losses.avg, accuracy=accuracies.avg)
+            train_loader.set_postfix(
+                loss=losses.avg,
+                accuracy=accuracies.avg,
+                wt=dice_wts.avg,
+                tc=dice_tcs.avg,
+                et=dice_ets.avg,
+            )
 
         if scheduler is not None:
             scheduler.step()
@@ -127,11 +149,14 @@ def trainer(
 
     # Remove this comment for logging on epoch basis
     if phase == "Training":
-        wandb.log({"Train Dice Loss": losses.avg})
-        wandb.log({"Train Dice Score": accuracies.avg})
+        wandb.log({"Train Dice Loss": losses.avg, "epoch": epoch + 1})
+        wandb.log({"Train Dice Score": accuracies.avg, "epoch": epoch + 1})
     elif phase == "Validating":
-        wandb.log({"Validation Dice Loss": losses.avg})
-        wandb.log({"Validation Dice Score": accuracies.avg})
+        wandb.log({"Validation Dice Loss": losses.avg, "epoch": epoch + 1})
+        wandb.log({"Validation Dice Score": accuracies.avg, "epoch": epoch + 1})
+        wandb.log({"Whole Tumor Dice Loss": dice_wts.avg, "epoch": epoch + 1})
+        wandb.log({"Enhancing Tumor Dice Score": dice_ets.avg, "epoch": epoch + 1})
+        wandb.log({"Tumor Core Dice Loss": dice_tcs.avg, "epoch": epoch + 1})
 
     # if not model.training:
     # save_metrics(epoch, metrics, swa, logger, epoch, False, save_folder)

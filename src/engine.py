@@ -18,8 +18,8 @@ from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
 from model.unet import NvNet
 from loader.dataloader import get_dataset
-from loss import EDiceLoss, SoftDiceLossSquared
-from utils import save_args, seed_torch, determinist_collate
+from utils.losses import EDiceLoss, SoftDiceLossSquared
+from utils.ops import seed_torch
 from train import trainer
 
 
@@ -43,7 +43,10 @@ def main(args, fold_num):
         # f"_norm{args.model.normalization}"
         f"{'_' + args.com.replace(' ', '_') if args.com else ''}"
     )
+
     wandb.init(project=args.logger.project_name, config=args)
+    wandb.run.name = args.logger.run_name
+    wandb.run.save()
 
     if args.save:
         save_folder = (
@@ -178,8 +181,6 @@ def main(args, fold_num):
             scheduler.step()
             print("scheduler stepped!")
 
-    wandb.run.name = f"BRATS_F{fold_num+1}"
-    wandb.run.save()
     # TODO: generate segmentation maps
 
 

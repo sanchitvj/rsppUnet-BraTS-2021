@@ -7,24 +7,21 @@ from scipy.ndimage.filters import gaussian_filter
 
 import torch.nn as nn
 
-# NOTE: random_shift, elastic_transfrom and random_rotate are taken from
+# NOTE: elastic_transfrom and random_rotate are taken from below
 # https://github.com/The-AI-Summer/learn-deep-learning/tree/main/Medical
 
 
 def exp_dim_mask(image, mask):
 
     mask_new = mask.copy()
-    start_time = time.time()
     mask_new = np.pad(
         mask_new,
         ((0, 1), (0, 0), (0, 0), (0, 0)),
         mode="constant",
         constant_values=5,
     )
-    #     print("time taken to pad: ",(time.time()-start_time))
-    start_time2 = time.time()
+    # TODO: modify code structure
     image, mask = elastic_transform(image, mask_new)
-    #     print("time taken for elastic transform: ", (time.time()-start_time2))
     mask_new = np.delete(mask, 3, 0)
 
     return image, mask_new
@@ -47,28 +44,6 @@ def flip(img, mask):
         img_flip = img[:, :, :, ::-1] - np.zeros_like(img)
         mask_flip = mask[:, :, :, ::-1] - np.zeros_like(mask)
     return img_flip, mask_flip
-
-
-def shift(img, mask, max_percentage=0.4):
-
-    _, dim1, dim2, dim3 = img.shape
-    m1, m2, m3 = (
-        int(dim1 * max_percentage / 2),
-        int(dim1 * max_percentage / 2),
-        int(dim1 * max_percentage / 2),
-    )
-    d1 = np.random.randint(-m1, m1)
-    d2 = np.random.randint(-m2, m2)
-    d3 = np.random.randint(-m3, m3)
-
-    offset_matrix = np.array(
-        [[0, 0, 0, 1], [1, 0, 0, d1], [0, 1, 0, d2], [0, 0, 1, d3]]
-    )
-    # print(offset_matrix.shape)
-    img = ndimage.interpolation.affine_transform(img, offset_matrix)
-    mask = ndimage.interpolation.affine_transform(mask, offset_matrix)
-
-    return img, mask
 
 
 def elastic_transform(image, mask, alpha=6, sigma=40, bg_val=0.1):
@@ -140,16 +115,10 @@ def test_aug(img, mask, aug_name, args):
 
     if aug_name == "flip":
         imgnew, masknew = flip(imgnew, masknew)
-
     if aug_name == "brightness":
         imgnew, masknew = brightness(imgnew, masknew)
-
     if aug_name == "rotate":
         imgnew, masknew = rotate(imgnew, masknew, args.min_angle, args.max_angle)
-
-    if aug_name == "shift":
-        imgnew, masknew = shift(img, masknew, args.max_percentage)
-
     if aug_name == "elastic_transform":
         imgnew, masknew = exp_dim_mask(imgnew, masknew)  # NOTE: no args for now
 
@@ -162,21 +131,15 @@ def multi_augs(img, mask, args):
     """
     imgnew, masknew = img, mask
 
-    aug_bool = np.random.choice([0, 1], size=4)
+    aug_bool = np.random.choice([0, 1], size=3)
     if np.any(aug_bool[0]):
         imgnew, masknew = flip(imgnew, masknew)
-
     if np.any(aug_bool[1]):
         imgnew, masknew = brightness(imgnew, masknew)
-
     if np.any(aug_bool[2]):
         imgnew, masknew = rotate(imgnew, masknew, args.min_angle, args.max_angle)
-
     if np.any(aug_bool[3]):
-        imgnew, masknew = shift(imgnew, masknew, args.max_percentage)
-
-    #     if np.any(aug_bool[4]):
-    #         imgnew, masknew = elastic_transform(imgnew, masknew)  # NOTE: no args for now
+        imgnew, masknew = elastic_transform(imgnew, masknew)  # NOTE: no args for now
 
     return imgnew, masknew
 
@@ -193,8 +156,6 @@ def robust_augs(img, mask, args):
         imgnew, masknew = brightness(imgnew, masknew)
     if np.random.random_sample() < 0.3:
         imgnew, masknew = rotate(imgnew, masknew, args.min_angle, args.max_angle)
-    #     if np.random.random_sample() < 0.3:
-    #         imgnew, masknew = shift(imgnew, masknew, args.max_percentage)
     if np.random.random_sample() < 0.3:
         imgnew, masknew = exp_dim_mask(imgnew, masknew)
 

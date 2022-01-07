@@ -1,16 +1,17 @@
 # INITIAL SETTINGS
 
-device: 'cuda:1'
+device: 'cuda:0'
 seed: 12536
-debug: False
+debug: True
 save: False
+fold: 0
 
 dataset:
   data_path: "/nfs/Workspace/brats_brain_segmentation/data/BraTS2021_data/training"
   teacher_model: False # True
   num_workers: 8 # batch_size * ngpu
   batch_size: 1
-  img_size: [160, 160, 160]
+  img_size: [155, 240, 240]
     
 augs:
   apply: True
@@ -36,9 +37,10 @@ scheduler: "CosineAnnealingLR" # CosineAnnealingWarmRestarts
 
 train:
   resume: 
-  epochs: 15
+  epochs: 5
 
 logger:
   project_name: "BraTS_test" # BraTS_resume, BraTS_folds
+  run_name: "BRATS_F1"
 
-com: "robust augs" # Comment
+com: "fold 1, 0.99 robust augs" # Comment
