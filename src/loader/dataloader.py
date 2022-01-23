@@ -1,8 +1,4 @@
-import os, pathlib, time, random
-import gzip
-from posixpath import dirname
-from albumentations import augmentations
-from cv2 import phase, phaseCorrelate
+import os, time, random
 from numpy.core.fromnumeric import size
 from numpy.lib.type_check import imag
 from tqdm import tqdm
@@ -12,20 +8,10 @@ from skimage.util import montage
 from sklearn.model_selection import KFold
 
 import nibabel as nib
-import pydicom as pdm
-import nilearn as nl
-import nilearn.plotting as nlplt
-
 import numpy as np
-import pandas as pd
-import torch
 from torch.utils.data import DataLoader, Dataset
 
-import albumentations as A
-from albumentations import Compose, HorizontalFlip, RandomResizedCrop
-from albumentations.pytorch import ToTensorV2
-
-from augmentations import DataAugmentation
+from .augmentations import DataAugmentation
 
 
 def pad_or_crop_image(image, seg=None, target_size=(128, 128, 128)):
@@ -136,7 +122,7 @@ class BratsDataset(Dataset):
 
         mask = self.preprocess_mask_labels(mask)
         # mask = mask[:, zmin:zmax, ymin:ymax, xmin:xmax]
-
+        #         print(img.shape, mask.shape) (4, 155, 240, 240) (3, 155, 240, 240)
         # FIXME: not using pad_crop for validation gives error(spp_net3D)
         img, mask = pad_or_crop_image(img, mask, target_size=self.size)
         if self.phase == "train":

@@ -59,12 +59,12 @@ def main(args, fold_num):
         "input_shape": (args.dataset.batch_size, 4, [args.dataset.img_size]),
         "output_channel": 3,
         "n_labels": 3,
-        "activation": args.model.activation,
-        "normalization": args.model.normalization,
+        # "activation": args.model.activation,
+        # "normalization": args.model.normalization,
     }
 
     # TODO: change the name of the architecture
-    model = NvNet(model_config)
+    model = NvNet(model_config, args)
     print(
         f"Number of trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
     )

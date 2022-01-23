@@ -59,6 +59,20 @@ def elastic_transform(image, mask, alpha=6, sigma=40, bg_val=0.1):
     return image, mask_new
 
 
+def intensity_shift(img, mask, factor=0.1):
+
+    scale_factor = np.random.uniform(
+        1.0 - factor, 1.0 + factor, size=[1, img.shape[1], 1, img.shape[-1]]
+    )
+    shift_factor = np.random.uniform(
+        -factor, factor, size=[1, img.shape[1], 1, img.shape[-1]]
+    )
+
+    image = img * scale_factor + shift_factor
+
+    return image, mask
+
+
 def rotate(img, mask, min_angle=-30, max_angle=30):
     """
     Returns a random rotated array in the same shape
@@ -158,6 +172,8 @@ def robust_augs(img, mask, args):
         imgnew, masknew = rotate(imgnew, masknew, args.min_angle, args.max_angle)
     if np.random.random_sample() < 0.3:
         imgnew, masknew = exp_dim_mask(imgnew, masknew)
+    if np.random.random_sample() < 0.3:
+        imgnew, masknew = intensity_shift(imgnew, masknew)
 
     return imgnew, masknew
 

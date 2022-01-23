@@ -1,8 +1,8 @@
 # INITIAL SETTINGS
 
-device: 'cuda:0'
+device: "cuda:1"
 seed: 12536
-debug: True
+debug: False
 save: False
 fold: 0
 
@@ -11,13 +11,13 @@ dataset:
   teacher_model: False # True
   num_workers: 8 # batch_size * ngpu
   batch_size: 1
-  img_size: [155, 240, 240]
-    
+  img_size: [160, 160, 160] # 192×224×160
+
 augs:
   apply: True
-  aug_name:  # flip, rotate, shift, brightness, elastic_transform
+  aug_name: # flip, rotate, shift, brightness, elastic_transform
   aug_type: "robust" # robust
-  aug_prob: 0.95
+  aug_prob: 0.99
   min_angle: -30
   max_angle: 30
   max_percentage: 0.4
@@ -25,6 +25,8 @@ augs:
 model:
   normalization: "group_normalization" # batch_normalization
   activation: "relu" # elu, leakyrelu
+  num_groups: 16
+  wt_std: False # Weight Standardisation
 
 optimizer:
   optim: "adam" # Ranger, AdamW
@@ -36,11 +38,11 @@ criterion: "SoftDiceLossSquared" # DC_and_Focal_loss, EDiceLoss, FocalLoss
 scheduler: "CosineAnnealingLR" # CosineAnnealingWarmRestarts
 
 train:
-  resume: 
-  epochs: 5
+  resume:
+  epochs: 25
 
 logger:
   project_name: "BraTS_test" # BraTS_resume, BraTS_folds
-  run_name: "BRATS_F1"
+  run_name: "normal_augs_160"
 
 com: "fold 1, 0.99 robust augs" # Comment
