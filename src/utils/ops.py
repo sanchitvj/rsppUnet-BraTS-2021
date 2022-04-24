@@ -8,15 +8,6 @@ import torch.nn.functional as F
 import SimpleITK as sitk
 from torch.cuda.amp import autocast
 
-# from .metrics import calculate_metrics
-
-
-HAUSSDORF = "haussdorf"
-DICE = "dice"
-SENS = "sens"
-SPEC = "spec"
-METRICS = [HAUSSDORF, DICE, SENS, SPEC]
-
 
 def seed_torch(seed):
     random.seed(seed)

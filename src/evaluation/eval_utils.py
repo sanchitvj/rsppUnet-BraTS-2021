@@ -1,21 +1,10 @@
 import SimpleITK as sitk
 import numpy as np
 import pandas as pd
-import torch, os, random
-import yaml
-from matplotlib import pyplot as plt
-from numpy import logical_and as l_and, logical_not as l_not
+import torch, os, random, imageio
 from torch.cuda.amp import autocast
-
+from tqdm import tqdm
 import torch.nn.functional as F
-from itertools import combinations, product
-
-import torch
-
-trs = list(combinations(range(2, 5), 2)) + [None]
-flips = list(range(2, 5)) + [None]
-rots = list(range(1, 4)) + [None]
-transform_list = list(product(flips, rots))
 
 
 def seed_torch(seed):
@@ -27,56 +16,9 @@ def seed_torch(seed):
     torch.backends.cudnn.deterministic = True
 
 
-def simple_tta(x):
-    """Perform all transpose/mirror transform possible only once.
-
-    Sample one of the potential transform and return the transformed image and a lambda function to revert the transform
-    Random seed should be set before calling this function
-    """
-    out = [[x, lambda z: z]]
-    for flip, rot in transform_list[:-1]:
-        if flip and rot:
-            trf_img = torch.rot90(x.flip(flip), rot, dims=(3, 4))
-            back_trf = revert_tta_factory(flip, -rot)
-        elif flip:
-            trf_img = x.flip(flip)
-            back_trf = revert_tta_factory(flip, None)
-        elif rot:
-            trf_img = torch.rot90(x, rot, dims=(3, 4))
-            back_trf = revert_tta_factory(None, -rot)
-        else:
-            raise
-        out.append([trf_img, back_trf])
-    return out
-
-
-def apply_simple_tta(model, x, average=True):
-    todos = simple_tta(x)
-    out = []
-    for im, revert in todos:
-        if model.deep_supervision:
-            out.append(revert(model(im)[0]).sigmoid_().cpu())
-        else:
-            out.append(revert(model(im)).sigmoid_().cpu())
-    if not average:
-        return out
-    return torch.stack(out).mean(dim=0)
-
-
-def revert_tta_factory(flip, rot):
-    if flip and rot:
-        return lambda x: torch.rot90(x.flip(flip), rot, dims=(3, 4))
-    elif flip:
-        return lambda x: x.flip(flip)
-    elif rot:
-        return lambda x: torch.rot90(x, rot, dims=(3, 4))
-    else:
-        raise
-
-
 def pad_batch1_to_compatible_size(batch):
 
-    #     print(batch.shape)
+    # print(batch.shape)
     shape = batch.shape
     zyx = list(shape[-3:])
     for i, dim in enumerate(zyx):
@@ -94,24 +36,24 @@ def pad_batch1_to_compatible_size(batch):
     return batch, (zpad, ypad, xpad)
 
 
-def generate_segmentations(data_loader, model, args, save_folder):
+def generate_segmentations(
+    data_loader, model, device, save_folder, verbose=False, visualize=False
+):
 
-    for i, batch in enumerate(data_loader):
+    model.eval()
+    for i, batch in enumerate(tqdm(data_loader, total=len(data_loader))):
 
-        # measure data loading time
         inputs = batch["image"]
         patient_id = batch["id"][0]
         ref_path = batch["seg_path"][0]
-        #         print(patient_id)
 
         inputs, pads = pad_batch1_to_compatible_size(inputs)
 
-        inputs = inputs.cuda()
+        inputs = inputs.to(device)  # cuda()
 
         with autocast():
             with torch.no_grad():
                 pre_segs = model(inputs)
-                # pre_segs = torch.sigmoid(pre_segs)
 
         # remove pads
         maxz, maxy, maxx = (
@@ -120,14 +62,17 @@ def generate_segmentations(data_loader, model, args, save_folder):
             pre_segs.size(4) - pads[2],
         )
         pre_segs = pre_segs[:, :, 0:maxz, 0:maxy, 0:maxx].cpu()
+        # print(pre_segs.shape)
         segs = torch.zeros((1, 3, 155, 240, 240))
         segs[0, :, :, :, :] = pre_segs[0]
+        # segs = segs.argmax(0) # takes very long time
         # model_preds.append(segs)
 
         # pre_segs = torch.stack(model_preds).mean(dim=0)
         segs = segs[0].numpy() > 0.5
 
         et = segs[0]
+        # print("et shape: ", et.shape) # (155 ,240, 240)
         net = np.logical_and(segs[1], np.logical_not(et))
         ed = np.logical_and(segs[2], np.logical_not(segs[1]))
 
@@ -135,9 +80,64 @@ def generate_segmentations(data_loader, model, args, save_folder):
         labelmap[et] = 4
         labelmap[net] = 1
         labelmap[ed] = 2
-        labelmap = sitk.GetImageFromArray(labelmap)
-        ref_seg_img = sitk.ReadImage(ref_path)
-        labelmap.CopyInformation(ref_seg_img)
 
-        #         print(f"Writing {save_folder}/{patient_id}.nii.gz")
+        if verbose:
+            print(
+                "1:",
+                np.sum(labelmap == 1),
+                " | 2:",
+                np.sum(labelmap == 2),
+                " | 4:",
+                np.sum(labelmap == 4),
+            )
+            print(
+                "WT:",
+                np.sum((labelmap == 1) | (labelmap == 2) | (labelmap == 4)),
+                " | TC:",
+                np.sum((labelmap == 1) | (labelmap == 4)),
+                " | ET:",
+                np.sum(labelmap == 4),
+            )
+        # labelmap = labelmap[::-1]
+        # print("labelmap: ", labelmap.shape) # (155 ,240, 240)
+        labelmap_arr = labelmap.transpose(2, 1, 0)
+        labelmap = sitk.GetImageFromArray(labelmap)  # .transpose(2, 1, 0))
+        ref_seg_img = sitk.ReadImage(ref_path)
+        # print("ref img: ", ref_seg_img.GetSize()) # (240, 240, 240)
+
+        Direction = ref_seg_img.GetDirection()
+        Origin = ref_seg_img.GetOrigin()
+        Spacing = ref_seg_img.GetSpacing()
+
+        labelmap.SetOrigin(Origin)
+        labelmap.SetSpacing(Spacing)
+        labelmap.SetDirection(Direction)
+        labelmap.CopyInformation(ref_seg_img)
+        # original mask size: (240, 240, 155)
+        # print("after copy info: ", labelmap.GetSize()) # (240, 240, 240)
+
+        # print(f"Writing {save_folder}/{patient_id}.nii.gz")
         sitk.WriteImage(labelmap, f"{save_folder}/{patient_id}.nii.gz")
+
+        visual = f"{save_folder}/visuals"
+
+        if visualize:
+            """--- grey figure---"""
+            # Snapshot_img = np.zeros(shape=(H,W,T),dtype=np.uint8)
+            # Snapshot_img[np.where(output[1,:,:,:]==1)] = 64
+            # Snapshot_img[np.where(output[2,:,:,:]==1)] = 160
+            # Snapshot_img[np.where(output[3,:,:,:]==1)] = 255
+            """ --- colorful figure--- """
+            Snapshot_img = np.zeros(shape=(240, 240, 3, 155), dtype=np.uint8)
+            Snapshot_img[:, :, 0, :][np.where(labelmap_arr == 1)] = 255
+            Snapshot_img[:, :, 1, :][np.where(labelmap_arr == 2)] = 255
+            Snapshot_img[:, :, 2, :][np.where(labelmap_arr == 4)] = 255
+
+            for frame in range(155):
+                if not os.path.exists(os.path.join(visual, patient_id)):
+                    os.makedirs(os.path.join(visual, patient_id))
+                # scipy.misc.imsave(os.path.join(visual, name, str(frame)+'.png'), Snapshot_img[:, :, :, frame])
+                imageio.imwrite(
+                    os.path.join(visual, patient_id, str(frame) + ".png"),
+                    Snapshot_img[:, :, :, frame],
+                )

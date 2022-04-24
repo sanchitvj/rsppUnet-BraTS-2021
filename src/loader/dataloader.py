@@ -102,18 +102,6 @@ class BratsDataset(Dataset):
             images.append(img)
 
         img = np.stack(images)
-        # FIXME: preprocessing removed; collate not working.
-        # Remove maximum extent of the zero-background to make future crop more useful
-        #        z_indexes, y_indexes, x_indexes = np.nonzero(np.sum(img, axis=0) != 0)
-        # Add 1 pixel in each side
-        #        zmin, ymin, xmin = [
-        #            max(0, int(np.min(arr) - 1)) for arr in (z_indexes, y_indexes, x_indexes)
-        #        ]
-        #       zmax, ymax, xmax = [
-        #          int(np.max(arr) + 1) for arr in (z_indexes, y_indexes, x_indexes)
-        #     ]
-        #    img = img[:, zmin:zmax, ymin:ymax, xmin:xmax]
-
         img = np.moveaxis(img, (0, 1, 2, 3), (0, 3, 2, 1))
 
         mask_name = dir_name + self.seg_type
@@ -121,8 +109,7 @@ class BratsDataset(Dataset):
         mask = self.load_img(mask_path)
 
         mask = self.preprocess_mask_labels(mask)
-        # mask = mask[:, zmin:zmax, ymin:ymax, xmin:xmax]
-        #         print(img.shape, mask.shape) (4, 155, 240, 240) (3, 155, 240, 240)
+        # print(img.shape, mask.shape) (4, 155, 240, 240) (3, 155, 240, 240)
         # FIXME: not using pad_crop for validation gives error(spp_net3D)
         img, mask = pad_or_crop_image(img, mask, target_size=self.size)
         if self.phase == "train":
@@ -130,8 +117,6 @@ class BratsDataset(Dataset):
             if self.augmentations.apply:
                 augment = DataAugmentation(self.augmentations)
                 img, mask = augment(img.astype(np.float32), mask.astype(np.float32))
-                # mask = augment(mask.astype(np.float32))
-        #                 img, mask = pad_or_crop_image(img, mask, target_size=self.size)
         else:
             img, mask = img.astype(np.float32), mask.astype(np.float32)
 

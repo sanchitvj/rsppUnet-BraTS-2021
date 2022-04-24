@@ -1,7 +1,8 @@
 import argparse, os, time, pathlib
 from logging import warn
-from datetime import datetime
+import datetime
 import numpy as np
+from termcolor import colored
 from tqdm import tqdm
 import warnings
 
@@ -13,12 +14,12 @@ from logger.wandb_creds import get_wandb_credentials
 wandb.login(key=get_wandb_credentials(person="sanchit"))
 
 import torch
-from torch.optim import Adam, AdamW
+from torch.optim import Adam
 from torch.optim.lr_scheduler import CosineAnnealingLR
 from torch.utils.data import DataLoader
-from model.unet import NvNet
+from model.unet import rsppUnet
 from loader.dataloader import get_dataset
-from utils.losses import EDiceLoss, SoftDiceLossSquared
+from utils.losses import SoftDiceLossSquared
 from utils.ops import seed_torch
 from train import trainer
 
@@ -26,21 +27,36 @@ from train import trainer
 def main(args, fold_num):
 
     ngpus = torch.cuda.device_count()
-    print(f"Working with {ngpus} GPUs")
-    print("GPU Name: ", torch.cuda.get_device_name(0))
+    print(colored(f"Working with {ngpus} GPUs", "green"))
+    print(colored("GPU Name: {}".format(torch.cuda.get_device_name(0)), "green"))
 
     seed_torch(args.seed)
-    current_exp_time = datetime.now().strftime("%Y%m%d_%T").replace(":", "")
-    print("Current experiment time: ", current_exp_time)
+    #     current_exp_time = datetime.now().strftime("%Y%m%d_%T").replace(":", "")
+    current_time = datetime.datetime.now()
+    subdir = (
+        str(current_time.day)
+        + "-"
+        + str(current_time.month)
+        + "-"
+        + str(current_time.year)
+        + "__"
+    )
+    time_name = (
+        str(current_time.hour)
+        + "_"
+        + str(current_time.minute)
+        + "_"
+        + str(current_time.second)
+    )
+    current_exp_time = subdir + time_name
+    print(colored("Current experiment time: {}".format(current_exp_time), "red"))
     exp_name = (
         f"{current_exp_time}_"
         f"_fold{(fold_num+1)}"
-        f"_batch{args.dataset.batch_size}"
-        f"_img{args.dataset.img_size[0]}"
+        f"_img{args.dataset.img_size[2]}"
         f"_optim"
         f"_{args.optimizer.optim}"
         f"_lr{args.optimizer.lr}_epochs{args.train.epochs}"
-        # f"_norm{args.model.normalization}"
         f"{'_' + args.com.replace(' ', '_') if args.com else ''}"
     )
 
@@ -63,29 +79,25 @@ def main(args, fold_num):
         # "normalization": args.model.normalization,
     }
 
-    # TODO: change the name of the architecture
-    model = NvNet(model_config, args)
+    model = rsppUnet(model_config, args)
     print(
-        f"Number of trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
+        colored(
+            f"Number of trainable parameters: {sum(p.numel() for p in model.parameters() if p.requires_grad)}",
+            "green",
+        )
     )
 
-    # TODO: try more than one GPU
-    # if ngpus > 1:
-    #     model = torch.nn.DataParallel(model).cuda()
-    # else:
-    model = model.to(args.device)
+    if ngpus > 1:
+        model = torch.nn.DataParallel(model).cuda()
+    else:
+        model = model.to(args.device)
 
-    # TODO: experiment with losses
     criterion = SoftDiceLossSquared().to(args.device)
-    #     metric = criterion.metric
     metric = None
-    # print(metric)
 
-    # TODO: play with optimizers
     optimizer = Adam(
         model.parameters(), args.optimizer.lr, weight_decay=args.optimizer.wd, eps=1e-4
     )
-    # TODO: add warm up and experiment with parameters
     scheduler = CosineAnnealingLR(
         optimizer, args.train.epochs + round(args.train.epochs * 0.5)
     )
@@ -180,8 +192,6 @@ def main(args, fold_num):
         if epoch / args.train.epochs > 0.5:
             scheduler.step()
             print("scheduler stepped!")
-
-    # TODO: generate segmentation maps
 
 
 # if __name__ == "__main__":

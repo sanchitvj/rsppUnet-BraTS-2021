@@ -1,15 +1,9 @@
-import os, time, random
-from numpy.core.fromnumeric import size
-from numpy.lib.type_check import imag
+import os
 from tqdm import tqdm
-
 from skimage.transform import resize  # not using, highly inefficient
-from skimage.util import montage
-from sklearn.model_selection import KFold
-
 import nibabel as nib
 import numpy as np
-from torch.utils.data import DataLoader, Dataset
+from torch.utils.data import Dataset
 
 
 class BratsDatasetEval(Dataset):
@@ -18,19 +12,13 @@ class BratsDatasetEval(Dataset):
         args,
         data,
     ):
-
         self.data = data
-        # self.size = args.dataset.img_size
-        #         if self.teacher_model:
-        self.data_types = ["_flair.nii", "_t1.nii", "_t1ce.nii", "_t2.nii"]
-
-    #         else:
-    #         self.data_types = [
-    #             "_flair.nii.gz",
-    #             "_t1.nii.gz",
-    #             "_t1ce.nii.gz",
-    #             "_t2.nii.gz",
-    #         ]
+        self.data_types = [
+            "_flair.nii.gz",
+            "_t1.nii.gz",
+            "_t1ce.nii.gz",
+            "_t2.nii.gz",
+        ]
 
     def __len__(self):
         return len(self.data)
@@ -45,7 +33,7 @@ class BratsDatasetEval(Dataset):
         for data_type in self.data_types:
             img_name = dir_name + data_type
             img_path = os.path.join(root_path, img_name)
-            if data_type == "_t1.nii":
+            if data_type == "_t1.nii.gz":
                 seg_path = img_path
             img = self.load_img(img_path)  # .transpose(2, 0, 1)
             img = self.normalize(img)

@@ -12,13 +12,10 @@ from basic_blocks import (
 )
 from spp_block import Pyramid_Pooling_3D
 
-
-# TODO: change the name of the architecture
-
-
-class NvNet(nn.Module):
+# NOTE: rsppUnet -> Residual Spatial Pyramid Pooling Unet
+class rsppUnet(nn.Module):
     def __init__(self, config, args):
-        super(NvNet, self).__init__()
+        super(rsppUnet, self).__init__()
 
         self.config = config
         # some critical parameters
@@ -110,7 +107,7 @@ class NvNet(nn.Module):
 #         "activation": "relu",
 #         "normalization": "group_normalization",
 #     }
-#     net = NvNet(config)
+#     net = rsppUnet(config)
 #     out = net(x_train)
 #     print(f"Output shape {out.shape}")
 # Output  shape torch.Size([3, 3, 16, 16, 16])

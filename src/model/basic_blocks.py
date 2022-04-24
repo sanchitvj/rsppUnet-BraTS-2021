@@ -82,7 +82,6 @@ class EncoderBlock(nn.Module):
         self.num_groups = args.model.num_groups if args.model else args.num_groups
         self.wt_std = args.model.wt_std if args.model else args.wt_std
 
-        # TODO: try different normalizations
         if self.normalization == "group_normalization":
             self.norm1 = nn.GroupNorm(num_groups=self.num_groups, num_channels=inChans)
             self.norm2 = nn.GroupNorm(num_groups=self.num_groups, num_channels=inChans)
@@ -96,7 +95,7 @@ class EncoderBlock(nn.Module):
         elif self.activation == "elu":
             self.actv1 = nn.ELU(inplace=True)
             self.actv2 = nn.ELU(inplace=True)
-        elif self.activation == "leakyrelu":  # TODO: info on below params for leakyRELU
+        elif self.activation == "leakyrelu":
             self.actv1 = nn.LeakyReLU(negative_slope=0.01, inplace=True)
             self.actv2 = nn.LeakyReLU(negative_slope=0.01, inplace=True)
         if self.wt_std:
@@ -133,19 +132,18 @@ class EncoderBlock(nn.Module):
     def forward(self, x):
         residual = x
 
-        # out = self.norm1(x)
-        # out = self.actv1(out)
-        # out = self.conv1(out)
-        # out = self.norm2(out)
-        # out = self.actv2(out)
-        # out = self.conv2(out)
-
-        out = self.conv1(x)
-        out = self.norm1(out)
+        out = self.norm1(x)
         out = self.actv1(out)
-        out = self.conv2(out)
+        out = self.conv1(out)
         out = self.norm2(out)
         out = self.actv2(out)
+        out = self.conv2(out)
+
+        #         out = self.conv1(x)
+        #         out = self.norm1(out)
+        #         out = self.conv2(out)
+        #         out = self.norm2(out)
+        #         out = self.actv2(out)
 
         out += residual
 
@@ -249,19 +247,19 @@ class DecoderBlock(nn.Module):
     def forward(self, x):
         residual = x
 
-        # out = self.norm1(x)
-        # out = self.actv1(out)
-        # out = self.conv1(out)
-        # out = self.norm2(out)
-        # out = self.actv2(out)
-        # out = self.conv2(out)
-
-        out = self.conv1(x)
-        out = self.norm1(out)
+        out = self.norm1(x)
         out = self.actv1(out)
-        out = self.conv2(out)
+        out = self.conv1(out)
         out = self.norm2(out)
         out = self.actv2(out)
+        out = self.conv2(out)
+
+        #         out = self.conv1(x)
+        #         out = self.norm1(out)
+        #         out = self.actv1(out)
+        #         out = self.conv2(out)
+        #         out = self.norm2(out)
+        #         out = self.actv2(out)
 
         out += residual
 

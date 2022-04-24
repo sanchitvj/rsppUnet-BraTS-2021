@@ -2,29 +2,20 @@ import time, warnings
 
 warnings.filterwarnings("ignore")
 
-from datetime import datetime
 from tqdm import tqdm
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn.parallel
 import torch.optim
 import torch.utils.data
-from ranger import Ranger
 from torch.cuda.amp import autocast, GradScaler
 
-from model.unet import NvNet
-from loader.dataloader import get_dataset
-from utils.losses import SoftDiceLossSquared
 from utils.metrics import (
     AverageMeter,
-    save_metrics,
-    calculate_metrics,
-    dice_coefficient_1,
+    dice_coefficient,
     dice_per_region,
 )
 
-# Setting up logging stuff
 import wandb
 
 # Below function can also be used for validation
@@ -40,7 +31,6 @@ def trainer(
     EPOCHS,
     epoch,
     phase,
-    metric,
     device,
     debug,
 ):
@@ -62,11 +52,8 @@ def trainer(
     hds = AverageMeter("Avg. Hausdorff Distance", ":2f")
 
     scaler = GradScaler()
-
-    # TODO: get more info on perf_counter()
     start_point = time.perf_counter()
 
-    metrics = []
     if debug:
         train_loader = tqdm(train_loader, total=len(train_loader))
     for i, batch in enumerate(train_loader):
@@ -76,7 +63,6 @@ def trainer(
         images = batch["image"].to(device, non_blocking=True, dtype=torch.float)
         labels = batch["mask"].to(device, dtype=torch.float)
 
-        # TODO: check floating point precision
         # NOTE: avg mixed precision will not affect validation
         with autocast():
 
@@ -89,10 +75,7 @@ def trainer(
                 print("NaN in model loss!!")
 
             with torch.no_grad():
-                #                 met_ = calculate_metrics(logits.cpu(), labels.cpu(), None)
-                #                 print(met_)
-                #                 [{'patient_id': None, 'label': 'ET', 'tta': False, 'dice': 0, 'sens': nan, 'spec': 0.0}, {'patient_id': None, 'label': 'TC', 'tta': False, 'dice': 0, 'sens': nan, 'spec': 0.0}, {'patient_id': None, 'label': 'WT', 'tta': False, 'dice': 0, 'sens': nan, 'spec': 0.0}]
-                accuracy = dice_coefficient_1(
+                accuracy = dice_coefficient(
                     logits.cpu(), labels.cpu(), threshold=0.5, eps=1e-8
                 )
 
@@ -116,20 +99,12 @@ def trainer(
                     )
                     hd = (hd_et + hd_tc + hd_wt) / 3
                     hds.update(hd, batch["image"].size(0))
-        #                 dice_et, dice_tc, dice_wt = met_[0]["dice"], met_[1]["dice"], met_[2]["dice"]
-        #                 dice_ets.update(dice_et.detach().numpy(), batch["image"].size(0))
-        #                 dice_tcs.update(dice_tc.detach().numpy(), batch["image"].size(0))
-        #                 dice_wts.update(dice_wt.detach().numpy(), batch["image"].size(0))
-        #             if not model.training:
-        #                 metric_ = metric(logits, labels)
-        #                 metrics.extend(metric_)
 
         if model.training:
             scaler.scale(loss).backward()
             scaler.step(optimizer)
             scaler.update()
             optimizer.zero_grad()
-            # writer.add_scalar("lr", optimizer.param_groups[0]['lr'], global_step=epoch * batch_per_epoch + i)
 
         if debug:
             if model.training:
@@ -166,26 +141,26 @@ def trainer(
         batch_time.update(time.perf_counter() - start_point)
         start_point = time.perf_counter()
 
-    # TODO: explore wandb logger features for plotting
-
     # Remove this comment for logging on epoch basis
     if phase == "Training":
-        wandb.log({"Train Dice Loss": losses.avg})  # , "epoch": epoch + 1})
+        wandb.log({"Train Dice Loss": losses.avg})
         wandb.log({"Train Accuracy": accuracies.avg})
         score = accuracies.avg
-    #         wandb.log({"epoch": epoch + 1})
     elif phase == "Validating":
-        wandb.log({"Validation Dice Loss": losses.avg})
-        wandb.log({"Validation Accuracy": accuracies.avg})  # , "epoch": epoch + 1})
-        wandb.log({"Validation Dice Score": dice_scores.avg})  # , "epoch": epoch + 1})
-        wandb.log({"Whole Tumor Dice Score": dice_wts.avg})  # , "epoch": epoch + 1})
-        wandb.log({"Enhancing Tumor Dice Score": dice_ets.avg})
-        wandb.log({"Tumor Core Dice Score": dice_tcs.avg})  # , "epoch": epoch + 1})
-        wandb.log({"Whole Tumor Hausdorff Distance": hd_wts.avg})
-        wandb.log({"Enhancing Tumor Hausdorff Distance": hd_ets.avg})
-        wandb.log({"Tumor Core Hausdorff Distance": hd_tcs.avg})
-        wandb.log({"Avg. Hausdorff Distance": hds.avg})
-        #         wandb.log({"epoch": epoch + 1})
+        wandb.log(
+            {
+                "Validation Dice Loss": losses.avg,
+                "Validation Accuracy": accuracies.avg,
+                "Validation Dice Score": dice_scores.avg,
+                "Whole Tumor Dice Score": dice_wts.avg,
+                "Enhancing Tumor Dice Score": dice_ets.avg,
+                "Tumor Core Dice Score": dice_tcs.avg,
+                "Whole Tumor Hausdorff Distance": hd_wts.avg,
+                "Enhancing Tumor Hausdorff Distance": hd_ets.avg,
+                "Tumor Core Hausdorff Distance": hd_tcs.avg,
+                "Avg. Hausdorff Distance": hds.avg,
+            }
+        )
         score = dice_scores.avg
 
     return losses.avg, score
@@ -201,7 +176,7 @@ def trainer(
 #         "activation": "relu",
 #         "normalizaiton": "group_normalizaiton",
 #     }
-#     net = NvNet(config).to(device)
+#     net = rsppUnet(config).to(device)
 #     parameters = params = filter(lambda p: p.requires_grad, net.parameters())
 #     optimizer = torch.optim.Adam(net.parameters(), lr=1e-4)
 #     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer)

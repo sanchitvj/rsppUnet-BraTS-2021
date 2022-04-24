@@ -1,9 +1,6 @@
 import numpy as np
-import scipy, time, elasticdeform
+import elasticdeform
 import scipy.ndimage as ndimage
-from scipy.ndimage.interpolation import affine_transform
-from scipy.interpolate import RegularGridInterpolator
-from scipy.ndimage.filters import gaussian_filter
 
 import torch.nn as nn
 
@@ -12,7 +9,9 @@ import torch.nn as nn
 
 
 def exp_dim_mask(image, mask):
-
+    """
+    Pads the mask to resolve the extra dimension error.
+    """
     mask_new = mask.copy()
     mask_new = np.pad(
         mask_new,
